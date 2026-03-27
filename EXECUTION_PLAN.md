@@ -1,8 +1,22 @@
 # MCP Armor — Technical Execution Plan
 
-> Architect: Arqitect team
 > Stack: Rust (core/broker/CLI), Python SDK, Node SDK
-> Target: v1 shipped alongside Arqitect launch
+> Principle: Framework-agnostic, host-agnostic, language-agnostic
+> Showcase: Arqitect (reference consumer — not the design target)
+
+---
+
+## Guiding Principle
+
+MCP Armor is neutral infrastructure. It knows nothing about Arqitect, OpenClaw,
+NanoClaw, or any specific agent framework. It knows about:
+
+- The MCP protocol (JSON-RPC over stdio)
+- Armor manifests (standalone `armor.json` files)
+- Subprocess execution
+
+Any MCP tool, written in any language, run by any host, gets the same protection.
+Arqitect is one showcase among many — not the blueprint.
 
 ---
 
@@ -10,181 +24,191 @@
 
 ```
 mcparmor/
-├── Cargo.toml                        ← workspace manifest
+├── Cargo.toml                          ← workspace manifest
 ├── crates/
-│   ├── mcparmor-core/                ← types, manifest parsing, secret scanner
+│   ├── mcparmor-core/                  ← types, manifest parsing, secret scanner
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── manifest.rs           ← ArmorManifest, parse + validate
-│   │       ├── policy.rs             ← capability enforcement decisions
-│   │       ├── scanner.rs            ← secret/PII output scanning
-│   │       └── audit.rs              ← AuditLog, AuditEvent types
-│   ├── mcparmor-broker/              ← stdio proxy process
+│   │       ├── manifest.rs             ← ArmorManifest, parse + validate
+│   │       ├── policy.rs               ← capability enforcement decisions
+│   │       ├── scanner.rs              ← secret/PII output scanning
+│   │       └── audit.rs               ← AuditLog, AuditEvent types
+│   ├── mcparmor-broker/                ← stdio proxy process
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── main.rs
-│   │       ├── proxy.rs              ← JSON-RPC stdio proxy loop
-│   │       ├── interceptor.rs        ← param inspection, path/host validation
-│   │       └── trampoline.rs         ← Python trampoline injection
-│   └── mcparmor-cli/                 ← the `mcparmor` binary
+│   │       ├── proxy.rs                ← JSON-RPC stdio proxy loop
+│   │       └── interceptor.rs          ← param inspection, path/host validation
+│   └── mcparmor-cli/                   ← the `mcparmor` binary
 │       ├── Cargo.toml
 │       └── src/
 │           └── main.rs
 ├── spec/
-│   └── armor-manifest.schema.json    ← THE canonical schema
+│   └── armor.schema.json               ← THE canonical schema (standalone file)
 ├── sdks/
-│   ├── python/
-│   │   ├── pyproject.toml
-│   │   ├── mcparmor/
-│   │   │   ├── __init__.py
-│   │   │   ├── tool.py               ← ArmoredTool class
-│   │   │   ├── manifest.py           ← manifest loader
-│   │   │   └── trampoline.py         ← Python capability interceptor
-│   │   └── tests/
-│   └── node/
-│       ├── package.json
-│       ├── src/
-│       │   ├── index.ts
-│       │   ├── tool.ts               ← ArmoredTool class
-│       │   └── manifest.ts
-│       └── tests/
+│   ├── python/                         ← pip install mcparmor
+│   └── node/                           ← npm install mcparmor
+├── showcases/
+│   ├── arqitect/                       ← how Arqitect integrates MCP Armor
+│   ├── openclaw/                       ← how OpenClaw could integrate
+│   └── langchain/                      ← how LangChain tools could use it
 ├── profiles/
-│   └── community/                    ← armor profiles for popular MCP tools
+│   └── community/                      ← armor profiles for popular MCP tools
 │       ├── github.armor.json
 │       ├── filesystem.armor.json
+│       ├── playwright.armor.json
 │       └── ...
 ├── docs/
 │   ├── getting-started.md
 │   ├── manifest-spec.md
-│   ├── integrations/
-│   │   ├── arqitect.md
-│   │   ├── openclaw.md
-│   │   └── nanoclaw.md
-│   └── security-model.md
+│   ├── security-model.md
+│   └── integrations.md
 └── tests/
-    ├── adversarial/                  ← tools that try to escape
-    │   ├── read_passwd.py
-    │   ├── call_forbidden_host.py
-    │   ├── leak_secret_output.py
-    │   └── spawn_child.py
+    ├── adversarial/                    ← tools that try to escape
     └── fixtures/
-        └── tools/
+        └── tools/                      ← language-agnostic test tools
+            ├── python/
+            ├── node/
+            ├── go/
+            └── rust/
 ```
 
 ---
 
 ## M0 — Armor Manifest Spec
 
-### Decision: Extend existing `tool.json`, don't invent a new file
+### Decision: Standalone `armor.json` — not embedded in any framework's manifest
 
-The `armor` block lives inside the existing tool manifest. Tool authors add one block. No new file format to learn.
+MCP Armor has no opinion about how a tool is packaged. The armor manifest is a
+separate file. Tool authors ship it alongside their tool however they package it.
+
+```
+my-tool/
+  tool.py          ← the tool (any language, any structure)
+  armor.json       ← the armor manifest (MCP Armor's only concern)
+```
+
+Frameworks that want to embed the armor block in their own manifest (e.g. Arqitect's
+`tool.json`) can do so — MCP Armor accepts either a path to `armor.json` or an
+inline `armor` block extracted from any JSON file. That's the framework's choice,
+not ours.
 
 ### Schema Design
 
 ```json
 {
-  "armor": {
-    "version": "1.0",
-    "profile": "sandboxed",
+  "$schema": "https://mcparmor.io/spec/1.0/armor.schema.json",
+  "version": "1.0",
+  "profile": "sandboxed",
 
-    "filesystem": {
-      "read": ["/tmp/mcparmor/*"],
-      "write": ["/tmp/mcparmor/*"],
-      "deny_home": true
-    },
+  "filesystem": {
+    "read": ["/tmp/mcparmor/*"],
+    "write": ["/tmp/mcparmor/*"],
+    "deny_home": true
+  },
 
-    "network": {
-      "allow": ["api.github.com:443", "*.googleapis.com:443"],
-      "deny_local": true,
-      "deny_metadata": true
-    },
+  "network": {
+    "allow": ["api.github.com:443", "*.googleapis.com:443"],
+    "deny_local": true,
+    "deny_metadata": true
+  },
 
-    "spawn": false,
+  "spawn": false,
 
-    "env": {
-      "allow": ["GITHUB_TOKEN", "HOME", "PATH"],
-      "deny_system": true
-    },
+  "env": {
+    "allow": ["GITHUB_TOKEN", "HOME", "PATH"],
+    "deny_system": true
+  },
 
-    "output": {
-      "scan_secrets": true,
-      "max_bytes": 1048576
-    },
+  "output": {
+    "scan_secrets": true,
+    "max_bytes": 1048576
+  },
 
-    "resources": {
-      "timeout_ms": 30000,
-      "max_memory_mb": 256
-    }
+  "resources": {
+    "timeout_ms": 30000,
+    "max_memory_mb": 256
+  },
+
+  "locked": false
+}
+```
+
+### Profile Presets
+
+| Profile | filesystem | network | spawn | Use case |
+|---|---|---|---|---|
+| `strict` | none | none | false | Untrusted / AI-generated tools |
+| `sandboxed` | `/tmp/mcparmor/*` r/w | declared only | false | Community tools (default) |
+| `network` | none | declared only | false | Pure API tools |
+| `system` | declared paths | declared hosts | false | System/OS tools |
+| `browser` | `/tmp/mcparmor/*` r/w | `*:443` | false | Browser automation |
+
+`locked: true` means no MCP host can relax the profile at runtime. Mandatory for
+AI-generated tools.
+
+### Real Examples (language-agnostic)
+
+**A Go SSL checker tool:**
+```json
+{
+  "version": "1.0",
+  "profile": "network",
+  "network": {
+    "allow": ["*:443"],
+    "deny_local": true
   }
 }
 ```
 
-### Profile Presets (shorthand for common patterns)
-
+**A Node.js GitHub MCP server:**
 ```json
-{ "armor": { "profile": "strict" } }
-```
-
-| Profile | filesystem | network | spawn | env | Use case |
-|---|---|---|---|---|---|
-| `strict` | none | none | false | none | Dream-state / fabricated tools |
-| `sandboxed` | `/tmp/mcparmor/*` r/w | declared only | false | declared only | Community tools (default) |
-| `network` | none | declared only | false | declared only | Pure API tools |
-| `system` | declared paths | declared hosts | false | declared | System/OS tools |
-| `browser` | `/tmp/mcparmor/*` r/w | `*:443` | false | declared | Browser automation tools |
-
-Profiles are sugar. Full override always available.
-
-### Real Examples
-
-**cert_check** (network only, no filesystem):
-```json
-"armor": {
+{
+  "version": "1.0",
   "profile": "network",
-  "network": { "allow": ["*:443"], "deny_local": true }
+  "network": {
+    "allow": ["api.github.com:443", "github.com:443"],
+    "deny_local": true
+  },
+  "env": {
+    "allow": ["GITHUB_TOKEN"],
+    "deny_system": true
+  }
 }
 ```
 
-**browser_click** (needs Playwright IPC):
+**A Python browser automation tool:**
 ```json
-"armor": {
+{
+  "version": "1.0",
   "profile": "browser",
   "filesystem": {
-    "read": ["~/.arqitect_browser_cdp.json", "~/.arqitect_browser_pages.json"]
+    "read": ["/tmp/mcparmor/*"],
+    "write": ["/tmp/mcparmor/*"]
   },
-  "network": { "allow": ["localhost:*"], "deny_metadata": true }
+  "network": {
+    "allow": ["localhost:*"],
+    "deny_metadata": true
+  }
 }
 ```
 
-**barcode** (filesystem I/O, no network):
+**An AI-generated tool (locked strict):**
 ```json
-"armor": {
-  "profile": "sandboxed",
-  "filesystem": {
-    "read": ["/tmp/mcparmor/*", "$input_path"],
-    "write": ["/tmp/mcparmor/*", "$output_path"]
-  },
-  "network": { "allow": [] }
-}
-```
-
-**Fabricated tool** (hardcoded strict, non-overridable):
-```json
-"armor": {
+{
+  "version": "1.0",
   "profile": "strict",
   "locked": true
 }
 ```
 
-`locked: true` means the MCP host cannot relax this profile at runtime.
-
-### JSON Schema (`armor-manifest.schema.json`)
+### JSON Schema (`armor.schema.json`)
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mcparmor.io/spec/1.0/armor-manifest.schema.json",
+  "$id": "https://mcparmor.io/spec/1.0/armor.schema.json",
   "title": "MCP Armor Manifest",
   "type": "object",
   "required": ["version"],
@@ -226,8 +250,8 @@ Profiles are sugar. Full override always available.
     "resources": {
       "type": "object",
       "properties": {
-        "timeout_ms":     { "type": "integer", "default": 30000 },
-        "max_memory_mb":  { "type": "integer", "default": 256 }
+        "timeout_ms":    { "type": "integer", "default": 30000 },
+        "max_memory_mb": { "type": "integer", "default": 256 }
       }
     }
   }
@@ -238,119 +262,113 @@ Profiles are sugar. Full override always available.
 
 ## M1 — Broker Architecture
 
-### Core Decision: Stdio Proxy + Python Trampoline
+### Core Decision: Stdio Proxy Only (language-agnostic by default)
 
-Two enforcement layers:
+The broker is a **stdio proxy**. It wraps any subprocess command. It knows nothing
+about Python, Node, Go, or Rust. It only knows JSON-RPC over stdio.
 
-**Layer 1 — Stdio proxy (all tools, all languages)**
-The broker sits between the MCP host and the tool subprocess. Every JSON-RPC message flows through it. The broker inspects params (paths, URLs) before forwarding to the tool, and scans responses for secrets before returning.
+```
+Any MCP Host
+   ↕ (stdio JSON-RPC)
+[mcparmor broker]
+   reads armor.json
+   spawns: <any command>
+   proxies JSON-RPC both directions
+   validates: params (paths, URLs in param values)
+   scans: responses for secrets
+   enforces: timeout, memory limit
+   logs: all events to audit log
+   ↕ (stdio JSON-RPC)
+<any MCP tool subprocess>
+  python tool.py
+  node tool.js
+  ./tool (Go binary)
+  ./tool (Rust binary)
+  npx @modelcontextprotocol/server-github
+```
 
-**Layer 2 — Python trampoline (Python tools only)**
-For Python tools, the broker injects a trampoline script that runs before the tool code. The trampoline monkey-patches the Python runtime: `open()`, `requests`, `socket`, `subprocess`, `os.environ`. Any call that violates the manifest raises a `CapabilityViolation` — which the broker catches, logs, and returns as a JSON-RPC error.
-
-This covers the full Arqitect mcp_tools library since all tools are Python or Rust. Rust tools get Layer 1 only (protocol-level) — sufficient for v1.
+No language-specific trampolines in the core. Language-specific interceptors
+are optional SDK extensions — not broker concerns.
 
 ### Process Lifecycle
 
 ```
-1. MCP Host spawns: mcparmor run --manifest tool.json -- python tool.py
-2. Broker reads + validates armor manifest
-3. Broker spawns tool subprocess with modified environment:
-   - MCPARMOR_MANIFEST=/path/to/tool.json
-   - MCPARMOR_CALL_ID=<uuid>
-   - For Python: PYTHONPATH prepended with trampoline dir
-4. Broker enters proxy loop:
-   a. Read JSON-RPC line from MCP Host stdin
-   b. Validate params against manifest (paths, URLs in param values)
-   c. Forward approved request to tool subprocess stdin
-   d. Read JSON-RPC response from tool subprocess stdout
-   e. Scan response for secrets
-   f. Log the full event
-   g. Forward clean response to MCP Host stdout
-5. On timeout/error: kill tool subprocess, return JSON-RPC error, flush audit log
+1. MCP Host spawns:
+   mcparmor run --armor armor.json -- <any command>
+
+2. Broker:
+   a. Reads + validates armor.json
+   b. Spawns tool subprocess with restricted env (only declared env vars)
+   c. Enters proxy loop
+
+3. Proxy loop per JSON-RPC message:
+   a. Read line from MCP Host stdin
+   b. Parse JSON-RPC request
+   c. Inspect param values for path/URL references → validate against manifest
+   d. Forward approved request to tool stdin
+   e. Read response from tool stdout
+   f. Scan response for secrets → redact or block
+   g. Log full event to audit log
+   h. Forward clean response to MCP Host stdout
+
+4. On timeout: SIGTERM tool, wait 2s, SIGKILL, return JSON-RPC error
+5. On capability violation: log, return JSON-RPC error (do not kill — tool can continue)
+6. On secret detected: log + redact, forward sanitized response
 ```
 
-### Interceptor Logic
+### Param Inspection
 
-**Filesystem interception (Python trampoline):**
-```python
-# injected before tool code runs
-import builtins
-_original_open = builtins.open
-_allowed_reads = ["/tmp/mcparmor/*"]
-_allowed_writes = ["/tmp/mcparmor/*"]
+The broker inspects param values in JSON-RPC requests for path and URL references
+before forwarding. This catches cases where the tool receives a path from the host
+and uses it for filesystem access:
 
-def _armored_open(path, mode="r", **kwargs):
-    resolved = os.path.realpath(path)  # resolve symlinks
-    if "w" in mode or "a" in mode:
-        if not _matches_any(resolved, _allowed_writes):
-            raise CapabilityViolation(f"write denied: {resolved}")
-    else:
-        if not _matches_any(resolved, _allowed_reads):
-            raise CapabilityViolation(f"read denied: {resolved}")
-    return _original_open(path, mode, **kwargs)
-
-builtins.open = _armored_open
+```json
+{"method": "read_file", "params": {"path": "/etc/passwd"}}
 ```
 
-**Network interception (Python trampoline):**
-```python
-import socket
-_original_getaddrinfo = socket.getaddrinfo
+The broker validates `path` against `filesystem.read` before the tool ever sees it.
 
-def _armored_getaddrinfo(host, port, *args, **kwargs):
-    if not _host_allowed(host, port):
-        raise CapabilityViolation(f"network denied: {host}:{port}")
-    return _original_getaddrinfo(host, port, *args, **kwargs)
-
-socket.getaddrinfo = _armored_getaddrinfo
-```
-
-Patching `socket.getaddrinfo` covers all network libraries: `requests`, `httpx`, `urllib`, raw sockets — everything goes through DNS resolution first.
-
-**Spawn interception (Python trampoline):**
-```python
-import subprocess as _sp
-def _denied_spawn(*args, **kwargs):
-    raise CapabilityViolation("spawn denied")
-
-if not _armor_allows_spawn():
-    _sp.Popen = _denied_spawn
-    _sp.run = _denied_spawn
-    _sp.call = _denied_spawn
-```
+Pattern detection for param values:
+- Absolute paths: `/`, `C:\`, `~`
+- Relative path traversal: `../`
+- URLs: `http://`, `https://`, `ftp://`
+- Local addresses: `localhost`, `127.0.0.1`, `::1`, `169.254.169.254` (metadata)
 
 ### Secret Scanner
 
-Extend Arqitect's `check_secrets.py` patterns, compiled as Rust regex set for performance:
+Compiled Rust regex set. Runs on every response before forwarding:
 
 ```rust
 pub const SECRET_PATTERNS: &[(&str, &str)] = &[
     (r"sk-[A-Za-z0-9]{20,}", "openai_key"),
     (r"ghp_[A-Za-z0-9]{36,}", "github_pat"),
+    (r"ghs_[A-Za-z0-9]{36,}", "github_app_token"),
     (r"AKIA[A-Z0-9]{16}", "aws_access_key"),
     (r"-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----", "private_key"),
-    (r"(?:mongodb|postgres|mysql)://[^\s\"']+:[^\s\"']+@", "db_connection"),
+    (r"(?:mongodb|postgres|mysql|redis)://[^\s\"']+:[^\s\"']+@", "db_connection"),
     (r#"(?i)(?:api.?key|secret|password|token)\s*[=:]\s*["']?[A-Za-z0-9\-._~+/]{16,}"#, "generic_secret"),
     (r"eyJ[A-Za-z0-9\-_]+\.eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+", "jwt_token"),
+    (r"xox[baprs]-[A-Za-z0-9\-]{10,}", "slack_token"),
+    (r"AIza[A-Za-z0-9\-_]{35}", "google_api_key"),
 ];
 ```
 
-Scanner runs on every response before forwarding. If a secret is found:
-1. Log the detection event
-2. Redact the value in the response (`[REDACTED:openai_key]`)
-3. If `scan_secrets: strict` — return a JSON-RPC error instead of redacting
+On detection:
+- Default: redact in-place → `[REDACTED:openai_key]`
+- If `scan_secrets: "strict"`: return JSON-RPC error, block response entirely
+- Always: log detection event with tool name, call_id, pattern matched (not the value)
 
-### Audit Log Format (JSONL)
-
-One JSON object per line, append-only, written to `~/.mcparmor/audit/<date>.jsonl`:
+### Audit Log (JSONL, append-only)
 
 ```jsonl
-{"ts":"2026-03-27T10:00:00.123Z","session":"abc123","tool":"cert_check","event":"invoke","call_id":"uuid1","params":{"domain":"example.com"}}
-{"ts":"2026-03-27T10:00:00.456Z","session":"abc123","tool":"cert_check","event":"network_check","call_id":"uuid1","host":"example.com","port":443,"allowed":true}
-{"ts":"2026-03-27T10:00:01.789Z","session":"abc123","tool":"cert_check","event":"response","call_id":"uuid1","secret_scan":"clean","latency_ms":1666,"bytes":342}
-{"ts":"2026-03-27T10:00:02.000Z","session":"abc123","tool":"browser_click","event":"fs_violation","call_id":"uuid2","path":"/etc/passwd","profile":"sandboxed","action":"blocked"}
+{"ts":"2026-03-27T10:00:00.123Z","session":"abc","tool":"github_server","event":"invoke","call_id":"u1","method":"list_issues","params":{"repo":"owner/name"}}
+{"ts":"2026-03-27T10:00:00.200Z","session":"abc","tool":"github_server","event":"network_check","call_id":"u1","host":"api.github.com","port":443,"allowed":true}
+{"ts":"2026-03-27T10:00:01.800Z","session":"abc","tool":"github_server","event":"response","call_id":"u1","secret_scan":"clean","latency_ms":1600,"bytes":4200}
+{"ts":"2026-03-27T10:00:05.000Z","session":"abc","tool":"any_tool","event":"param_violation","call_id":"u2","param":"path","value":"/etc/passwd","action":"blocked"}
+{"ts":"2026-03-27T10:00:08.000Z","session":"abc","tool":"any_tool","event":"secret_detected","call_id":"u3","pattern":"openai_key","action":"redacted"}
 ```
+
+Written to: `~/.mcparmor/audit/<YYYY-MM-DD>.jsonl`
 
 ---
 
@@ -359,50 +377,68 @@ One JSON object per line, append-only, written to `~/.mcparmor/audit/<date>.json
 ### Commands
 
 ```
-mcparmor run     Run a tool under armor
-mcparmor validate  Validate an armor manifest
-mcparmor audit   Query the audit log
-mcparmor init    Add armor block to an existing tool.json
-mcparmor profile List built-in profiles
+mcparmor run       Run any MCP tool subprocess under armor
+mcparmor validate  Validate an armor manifest file
+mcparmor audit     Query the audit log
+mcparmor init      Generate an armor.json for a tool
+mcparmor profile   List and describe built-in profiles
 ```
 
 ### `mcparmor run`
 
 ```
 USAGE:
-  mcparmor run [OPTIONS] --manifest <FILE> -- <COMMAND> [ARGS...]
+  mcparmor run [OPTIONS] -- <COMMAND> [ARGS...]
 
 OPTIONS:
-  -m, --manifest <FILE>     Path to tool.json containing armor block
-  -p, --profile <PROFILE>   Override profile (cannot override if locked: true)
+  -a, --armor <FILE>         Path to armor.json [default: ./armor.json]
+  --profile <PROFILE>        Override profile (blocked if armor has locked: true)
   --audit-log <FILE>         Audit log path [default: ~/.mcparmor/audit/today.jsonl]
   --no-audit                 Disable audit logging
-  --strict                   Treat any capability violation as fatal (exit 1)
-  -v, --verbose              Print capability checks to stderr
+  --strict                   Any violation = fatal (exit 2)
+  -v, --verbose              Print capability decisions to stderr
+
+EXAMPLES:
+  # Python tool
+  mcparmor run -- python tool.py
+
+  # Node MCP server
+  mcparmor run --armor ./armor.json -- npx -y @modelcontextprotocol/server-github
+
+  # Go binary
+  mcparmor run --armor ./armor.json -- ./my-tool
+
+  # Rust binary with explicit profile override
+  mcparmor run --armor ./armor.json --profile strict -- ./my-tool
 
 EXIT CODES:
   0   Success
-  1   Tool error (JSON-RPC error response)
+  1   Tool returned a JSON-RPC error
   2   Capability violation (blocked by armor)
-  3   Manifest invalid
+  3   Armor manifest invalid or not found
   4   Timeout
+  5   Tool subprocess crashed
 ```
 
 ### `mcparmor validate`
 
 ```
 USAGE:
-  mcparmor validate --manifest <FILE>
+  mcparmor validate [--armor <FILE>]
 
-OUTPUT:
-  ✓ Manifest valid — profile: sandboxed
-    filesystem: read [/tmp/mcparmor/*], write [/tmp/mcparmor/*]
-    network: allow [api.github.com:443]
-    spawn: false
-    output scan: enabled
+OUTPUT (success):
+  ✓ armor.json — valid
+    profile:    sandboxed
+    filesystem: read [/tmp/mcparmor/*]  write [/tmp/mcparmor/*]
+    network:    allow [api.github.com:443]  deny_local: true
+    spawn:      false
+    output:     secret scan enabled
+    locked:     false
 
-  ✗ Manifest invalid
-    line 12: "profile" must be one of: strict, sandboxed, network, system, browser
+OUTPUT (failure):
+  ✗ armor.json — invalid
+    line 8: "profile" must be one of: strict, sandboxed, network, system, browser
+    line 15: "network.allow" items must be in format "host:port" or "host:*"
 ```
 
 ### `mcparmor audit`
@@ -412,103 +448,106 @@ USAGE:
   mcparmor audit [OPTIONS]
 
 OPTIONS:
-  --tool <NAME>       Filter by tool name
-  --event <TYPE>      Filter by event type (invoke|violation|secret_detected)
-  --since <DATETIME>  Filter by timestamp
-  --format <FORMAT>   Output format: table (default) | json | jsonl
+  --tool <NAME>        Filter by tool/command name
+  --event <TYPE>       invoke | violation | secret_detected | response
+  --since <DATETIME>   ISO8601 or relative (1h, 24h, 7d)
+  --format table|json  Output format [default: table]
 
-EXAMPLE OUTPUT:
-  TIME                  TOOL         EVENT            DETAIL
-  2026-03-27 10:00:00   cert_check   invoke           domain=example.com
-  2026-03-27 10:00:01   cert_check   network_check    example.com:443 ✓
-  2026-03-27 10:00:01   cert_check   response         clean, 342 bytes, 1666ms
-  2026-03-27 10:00:05   browser_clk  fs_violation     /etc/passwd BLOCKED
+TABLE OUTPUT:
+  TIME                  TOOL             EVENT             DETAIL
+  2026-03-27 10:00:00   github_server    invoke            list_issues
+  2026-03-27 10:00:01   github_server    response          clean 4.2KB 1600ms
+  2026-03-27 10:00:05   unknown_tool     param_violation   /etc/passwd BLOCKED
+  2026-03-27 10:00:08   unknown_tool     secret_detected   openai_key REDACTED
 ```
 
 ### `mcparmor init`
 
 ```
 USAGE:
-  mcparmor init --tool-dir <DIR>
+  mcparmor init [--dir <DIR>] [--profile <PROFILE>]
 
-Analyzes the tool's code, suggests an armor block, writes it to tool.json.
-Interactive — confirms each capability before writing.
+Generates a minimal armor.json in the given directory.
+Does NOT analyze source code — keeps tool author in control.
+Interactive mode confirms each capability.
 
-  Analyzing tool.py...
-  → Detected: network calls to *.example.com
-  → Detected: filesystem reads in /tmp
-  → No subprocess spawning detected
+  MCP Armor — armor.json generator
 
-  Suggested armor profile: sandboxed
-  Network allow: ["*.example.com:443"]
-  Filesystem read: ["/tmp/mcparmor/*"]
+  Profile [sandboxed]:
+  Filesystem read paths (comma-separated, blank for none): /tmp/mcparmor/*
+  Filesystem write paths (comma-separated, blank for none): /tmp/mcparmor/*
+  Network allow (host:port, comma-separated, blank for none): api.github.com:443
+  Allow spawn? [n]:
+  Env vars allowed (comma-separated, blank for none): GITHUB_TOKEN
+  Lock profile? [n]:
 
-  Write to tool.json? [Y/n]
+  Writing armor.json... done.
+  Validate: mcparmor validate
 ```
 
 ---
 
 ## M3 — Python SDK
 
+### Design Principle
+
+The Python SDK wraps the `mcparmor` CLI binary. It does not re-implement the
+broker in Python. This guarantees behavior parity with the CLI and every other SDK.
+
 ### API Surface
 
 ```python
-from mcparmor import ArmoredTool, ArmorManifest, CapabilityViolation
+from mcparmor import ArmoredProcess, ArmorManifest
 
-# --- Basic usage ---
-tool = ArmoredTool(
-    manifest_path="tool.json",
+# --- Wraps any subprocess command ---
+# Works with Python, Node, Go, Rust — anything
+
+proc = ArmoredProcess(
     command=["python", "tool.py"],
-    tool_dir="/path/to/tool"
+    armor="./armor.json",        # path OR inline dict
+    cwd="/path/to/tool"
 )
 
-# Single invocation
-result = tool.invoke({"domain": "example.com"})
+# Single call (spawns, calls, kills)
+result = proc.invoke({"method": "run", "params": {"domain": "example.com"}})
 
-# Context manager (persistent subprocess, multiple calls)
-with ArmoredTool("tool.json", ["python", "tool.py"]) as tool:
-    r1 = tool.invoke({"domain": "example.com"})
-    r2 = tool.invoke({"domain": "google.com"})
+# Persistent (spawn once, call many times)
+with ArmoredProcess(["npx", "-y", "@mcp/github"], armor="./armor.json") as proc:
+    r1 = proc.invoke({"method": "list_repos", "params": {}})
+    r2 = proc.invoke({"method": "get_issue",  "params": {"number": 42}})
 
-# --- Arqitect ToolManager integration ---
-from mcparmor import armor_subprocess
+# --- Manifest inspection (no broker needed) ---
+manifest = ArmorManifest.load("./armor.json")
+manifest.profile                              # "sandboxed"
+manifest.allows_network("api.github.com", 443)  # True
+manifest.allows_path_read("/etc/passwd")        # False
+manifest.is_locked()                          # False
 
-# Drop-in replacement for subprocess.Popen in ToolManager
-process = armor_subprocess(
-    command=["python", "tool.py"],
-    manifest_path="tool.json",
-    cwd=tool_dir
+# --- Low-level: get an armored Popen-compatible object ---
+from mcparmor import armor_popen
+
+proc = armor_popen(
+    ["python", "tool.py"],
+    armor="./armor.json"
 )
-# process speaks same JSON-RPC stdio interface
-
-# --- Manifest inspection ---
-manifest = ArmorManifest.load("tool.json")
-print(manifest.profile)          # "sandboxed"
-print(manifest.allows_network("api.github.com", 443))  # True
-print(manifest.allows_path_read("/etc/passwd"))         # False
-print(manifest.is_locked())      # False
+# proc.stdin / proc.stdout — standard JSON-RPC pipe
+# Drop-in for any framework that manages its own subprocess lifecycle
 ```
 
-### Arqitect ToolManager Integration
+### `armor_popen` — The Integration Primitive
+
+This is the key integration point for any Python framework. It returns a standard
+`subprocess.Popen`-compatible object. Frameworks don't need to change their
+subprocess management — just swap the spawn call.
 
 ```python
-# In arqitect-server ToolManager — minimal change required
-from mcparmor import armor_subprocess
+# Before (any Python agent framework)
+proc = subprocess.Popen(["python", "tool.py"], stdin=PIPE, stdout=PIPE)
 
-def _spawn_subprocess(self, tool: ToolConfig) -> subprocess.Popen:
-    manifest_path = os.path.join(tool.dir, "tool.json")
-    armor = ArmorManifest.load(manifest_path)
+# After — one line change
+proc = armor_popen(["python", "tool.py"], armor="armor.json")
 
-    if armor.has_armor_block():
-        return armor_subprocess(
-            command=tool.command,
-            manifest_path=manifest_path,
-            cwd=tool.dir,
-            env=self._build_env(tool)
-        )
-
-    # fallback: unarmored (legacy tools)
-    return subprocess.Popen(tool.command, ...)
+# Same interface — proc.stdin, proc.stdout, proc.wait(), proc.kill()
 ```
 
 ### Packaging
@@ -517,207 +556,218 @@ def _spawn_subprocess(self, tool: ToolConfig) -> subprocess.Popen:
 pip install mcparmor
 ```
 
-- Pure Python wrapper around the Rust binary
-- Ships the `mcparmor` binary for the current platform as a package data file
-- Auto-downloads correct binary on install via `pip` if platform binary not bundled
-- Minimum Python: 3.10
+Bundles the `mcparmor` Rust binary for the current platform as package data.
+Supports: linux-x86_64, linux-aarch64, darwin-x86_64, darwin-aarch64, windows-x86_64.
 
 ---
 
 ## M4 — Node SDK
 
+### Design Principle
+
+Same as Python SDK — wraps the CLI binary, does not reimplement the broker.
+
 ### API Surface
 
 ```typescript
-import { ArmoredTool, ArmorManifest } from 'mcparmor';
+import { ArmoredProcess, ArmorManifest, armorSpawn } from 'mcparmor';
 
-// Basic usage
-const tool = new ArmoredTool({
-  manifestPath: 'tool.json',
-  command: ['node', 'tool.js'],
-  toolDir: '/path/to/tool'
+// Wraps any command — Python, Node, Go, Rust, npx packages
+const proc = new ArmoredProcess({
+  command: ['npx', '-y', '@modelcontextprotocol/server-github'],
+  armor: './armor.json'
 });
 
-const result = await tool.invoke({ query: 'hello' });
-await tool.close();
+const result = await proc.invoke({ method: 'list_repos', params: {} });
+await proc.close();
 
-// Stream mode (persistent subprocess)
-const tool = await ArmoredTool.spawn('tool.json', ['node', 'tool.js']);
-const result = await tool.invoke(params);
-await tool.close();
+// Persistent subprocess
+const proc = await ArmoredProcess.spawn({
+  command: ['node', 'tool.js'],
+  armor: './armor.json'
+});
+const r1 = await proc.invoke(params1);
+const r2 = await proc.invoke(params2);
+await proc.close();
 
 // Manifest inspection
-const manifest = ArmorManifest.load('tool.json');
-manifest.allowsNetwork('api.github.com', 443); // true
-manifest.allowsPathRead('/etc/passwd');         // false
-```
+const manifest = ArmorManifest.load('./armor.json');
+manifest.allowsNetwork('api.github.com', 443);  // true
+manifest.isLocked();                             // false
 
-### OpenClaw / NanoClaw Integration Pattern
-
-```typescript
-// Drop-in for any OpenClaw skill runner
+// Low-level ChildProcess-compatible — drop-in for any Node framework
 import { armorSpawn } from 'mcparmor';
-
-const proc = armorSpawn({
-  command: ['python', 'tool.py'],
-  manifestPath: 'tool.json'
-});
-
-// proc is a standard ChildProcess — existing code unchanged
-proc.stdin.write(JSON.stringify(jsonRpcRequest) + '\n');
+const child = armorSpawn(['node', 'tool.js'], { armor: './armor.json' });
+// child.stdin, child.stdout — standard Node ChildProcess interface
 ```
 
 ---
 
 ## Cross-Platform Strategy
 
-### Layer 1 — Broker (all platforms, always active)
-Protocol-level enforcement. Works everywhere with zero OS dependencies. This is v1.
+### Layer 1 — Broker (always active, all platforms)
+Protocol-level enforcement via stdio proxy. Works on macOS, Linux, Windows,
+anywhere the binary runs. This is v1. Sufficient for launch.
 
-### Layer 2 — OS Primitives (v2, Linux + macOS first)
+### Layer 2 — OS Primitives (v2, opt-in)
 
-Generated automatically from the armor manifest. Belt-and-suspenders — not a replacement for Layer 1.
+Generated from `armor.json` automatically. Applied to the tool subprocess
+at spawn time. Belt-and-suspenders over Layer 1.
 
-**Linux (Seccomp + Landlock):**
-```rust
-// mcparmor-broker generates at spawn time
-fn apply_linux_profile(manifest: &ArmorManifest) -> Result<()> {
-    // Landlock: restrict filesystem access
-    let ruleset = LandlockRuleset::new()?;
-    for path in manifest.filesystem.read.iter() {
-        ruleset.add_rule(LandlockRule::PathBeneath {
-            path, access: AccessFs::READ
-        })?;
-    }
-    ruleset.restrict_self()?;
-
-    // Seccomp: block spawn if not allowed
-    if !manifest.spawn {
-        let filter = SeccompFilter::new(SeccompAction::Errno(EPERM));
-        filter.add_rule(SeccompRule::new(Syscall::Execve, SeccompAction::Kill));
-        filter.load()?;
-    }
-    Ok(())
-}
+**Linux — Seccomp + Landlock:**
+```
+armor.json filesystem.read → Landlock path rules
+armor.json filesystem.write → Landlock path rules
+armor.json spawn: false → Seccomp block execve
 ```
 
-**macOS (Seatbelt):**
-```rust
-// Generate Seatbelt profile string from manifest
-fn generate_seatbelt_profile(manifest: &ArmorManifest) -> String {
-    let mut rules = vec!["(version 1)", "(deny default)"];
-    for path in manifest.filesystem.read.iter() {
-        rules.push(&format!("(allow file-read* (subpath \"{path}\"))"));
-    }
-    // spawn
-    if !manifest.spawn {
-        rules.push("(deny process-exec)");
-    }
-    rules.join("\n")
-}
-
-// Then: sandbox_init(profile, 0, &err)
+**macOS — Seatbelt:**
+```
+armor.json → generated sandbox-exec profile string
+applied via: sandbox_init(profile, 0, &err)
 ```
 
-**Windows (v2, lower priority):**
-AppContainer via Win32 API. Same manifest → AppContainer capability set.
+**Windows — AppContainer (v3, lowest priority):**
+```
+armor.json → AppContainer capability set + job object limits
+```
+
+OS primitives are enabled via flag: `mcparmor run --os-sandbox -- ...`
+Not default in v1 — don't gate launch on OS-specific implementation.
 
 ---
 
 ## Testing Strategy
 
-### Unit Tests (mcparmor-core)
-- Manifest parsing: valid, missing fields, unknown profiles, locked override attempts
-- Policy decisions: `allows_path_read("/etc/passwd")` → false, `allows_path_read("/tmp/mcparmor/foo")` → true
-- Secret scanner: each pattern type, false positive rate, redaction output
-- Path glob matching: wildcards, symlink resolution, relative paths
+### Principle: Test behavior, not implementation
 
-### Integration Tests (mcparmor-broker)
-Run real tool subprocesses through the broker and assert behavior:
+Tests use the CLI directly — `mcparmor run -- <tool>`. This tests the full
+stack regardless of language. Language-specific SDK tests use `armor_popen` /
+`armorSpawn` as thin wrappers and verify they produce identical behavior.
+
+### Adversarial Test Tools (one per language, same behavior expected)
+
+Each adversarial tool exists in Python, Node, Go:
 
 ```
-tests/adversarial/read_passwd.py      → expect: CapabilityViolation, exit code 2
-tests/adversarial/call_forbidden.py   → expect: CapabilityViolation, exit code 2
-tests/adversarial/leak_secret.py      → expect: response with [REDACTED:openai_key]
-tests/adversarial/spawn_child.py      → expect: CapabilityViolation, exit code 2
-tests/adversarial/timeout.py          → expect: exit code 4 after 30s
+tests/adversarial/
+  read_passwd/
+    tool.py     ← tries open("/etc/passwd")
+    tool.js     ← tries fs.readFileSync("/etc/passwd")
+    tool.go     ← tries os.Open("/etc/passwd")
+  call_forbidden/
+    tool.py     ← tries requests.get("http://evil.com")
+    tool.js     ← tries fetch("http://evil.com")
+    tool.go     ← tries http.Get("http://evil.com")
+  leak_secret/
+    tool.py     ← returns hardcoded "sk-abc123..." in response
+    tool.js     ← same
+    tool.go     ← same
+  spawn_child/
+    tool.py     ← tries subprocess.run(["ls"])
+    tool.js     ← tries child_process.spawn("ls")
+    tool.go     ← tries exec.Command("ls").Run()
 ```
 
-### Fixture Tools (legitimate, should pass)
+Expected behavior for all: capability violation (exit 2) or redacted response.
+The broker must behave identically regardless of tool language.
+
+### Fixture Tools (legitimate, should succeed)
+
 ```
-tests/fixtures/tools/cert_check/      → network call to real host → should succeed
-tests/fixtures/tools/base64/          → pure compute, no I/O → should succeed
-tests/fixtures/tools/file_write/      → writes to /tmp/mcparmor → should succeed
+tests/fixtures/tools/
+  echo/         ← returns params unchanged, no I/O
+  http_get/     ← fetches declared host, returns response
+  file_read/    ← reads from /tmp/mcparmor/, returns content
 ```
 
 ### CI Matrix
 
-| OS | Python | Node | Test suite |
-|---|---|---|---|
-| ubuntu-latest | 3.10, 3.12 | 20, 22 | full |
-| macos-latest | 3.12 | 22 | full |
-| windows-latest | 3.12 | 22 | broker + CLI only (no OS primitives) |
+| OS | Languages tested | Suite |
+|---|---|---|
+| ubuntu-latest | Python 3.10/3.12, Node 20/22, Go 1.22 | full |
+| macos-latest | Python 3.12, Node 22 | full |
+| windows-latest | Python 3.12, Node 22 | broker + CLI only |
 
 ### Property-Based Tests
-Use `proptest` (Rust) for manifest parsing — generate random JSON, assert no panics.
+
+Fuzz manifest parsing with `proptest` — random JSON, assert no panics.
+Fuzz param inspection — random param values, assert no path traversal escapes.
+
+---
+
+## Showcases (not docs — working code)
+
+Each showcase is a self-contained working integration in `showcases/`:
+
+### `showcases/arqitect/`
+Shows how Arqitect's ToolManager uses `armor_popen` to wrap its mcp_tools.
+One file. Demonstrates the `armor` block inside Arqitect's `tool.json` format.
+
+### `showcases/openclaw/`
+Shows how an OpenClaw skill runner could use `armorSpawn` to wrap skills.
+Demonstrates the standalone `armor.json` file pattern.
+
+### `showcases/langchain/`
+Shows how a LangChain tool executor could wrap MCP tools with armor.
+Demonstrates the Python SDK `ArmoredProcess` class.
+
+### `showcases/bare_cli/`
+Shows the simplest possible usage — just the CLI, no SDK, any language.
+The README equivalent of "hello world."
 
 ---
 
 ## Launch Checklist (M5)
 
 **Code complete:**
-- [ ] Armor manifest schema published at `spec/armor-manifest.schema.json`
-- [ ] Broker handles all profile types without panicking
-- [ ] CLI `run`, `validate`, `audit`, `init` all working
-- [ ] Python SDK installable via `pip install mcparmor`
-- [ ] Node SDK installable via `npm install mcparmor`
-- [ ] Arqitect ships with MCP Armor as its tool execution layer
-- [ ] All adversarial tests pass (violations blocked, secrets redacted)
+- [ ] `armor.schema.json` published and versioned
+- [ ] Broker handles all profiles, all param types, no panics on malformed input
+- [ ] CLI: `run`, `validate`, `audit`, `init` all working
+- [ ] Python SDK: `pip install mcparmor` — `armor_popen` works on macOS + Linux
+- [ ] Node SDK: `npm install mcparmor` — `armorSpawn` works on macOS + Linux
+- [ ] All adversarial tests pass across Python, Node, Go tools
+- [ ] Secret scanner tested against all pattern types
 
 **Documentation:**
-- [ ] `README.md` with 5-minute quickstart
+- [ ] README: 2-minute quickstart using bare CLI (no SDK)
 - [ ] `docs/manifest-spec.md` — full schema reference
-- [ ] `docs/integrations/arqitect.md` — working code example
-- [ ] `docs/security-model.md` — honest explanation of what it does and doesn't protect
+- [ ] `docs/security-model.md` — honest model + limitations
+- [ ] `docs/integrations.md` — generic integration guide (not framework-specific)
+- [ ] `showcases/` — all three working showcases committed
 
 **Community profiles:**
-- [ ] Armor profiles for top 10 community MCP tools in `profiles/community/`
-- [ ] At minimum: github, filesystem, gmail, slack, notion, playwright
+- [ ] `armor.json` profiles for top 10 MCP tools in `profiles/community/`
+  Minimum: github, filesystem, gmail, slack, notion, playwright, fetch, git
 
 **Pre-launch:**
-- [ ] HN post draft written (Show HN format)
+- [ ] HN post draft: "Show HN: MCP Armor — capability protection for MCP tools"
 - [ ] ClawHavoc post-mortem article drafted
-- [ ] GitHub repo README has demo GIF or terminal recording
-- [ ] MIT license file present
-- [ ] CONTRIBUTING.md written
+- [ ] Demo terminal recording: `mcparmor run` blocking a path traversal attempt
+- [ ] MIT license present
+- [ ] CONTRIBUTING.md: how to submit community armor profiles
 
 ---
 
 ## Critical Path
 
 ```
-M0 Spec           ──────────────────────────────────────────────► publish schema
-                  │
-M1 Broker         └── depends on M0 ──────────────────────────► broker binary
-                                     │
-M2 CLI            └── depends on M1 ──────────────────────────► mcparmor binary
-                                     │
-                  ┌──────────────────┤
-M3 Python SDK     │  depends on M2   ──────────────────────────► pip install
-M4 Node SDK       │  depends on M2   ──────────────────────────► npm install
-                  │  (M3 and M4 parallel)
-                  │
-M5 Launch         └── depends on M2 + M3 + M4 ─────────────────► HN post
+M0 Spec ──────────────────────────────────────────────────► armor.schema.json published
+   │
+M1 Broker ─── depends on M0 ──────────────────────────────► broker binary working
+   │
+M2 CLI ─────── depends on M1 ──────────────────────────────► mcparmor binary
+   │                │
+   │         ┌──────┤
+M3 Python ───┤      ├─── parallel after M2 ─────────────────► pip install mcparmor
+M4 Node ─────┘      └─── parallel after M2 ─────────────────► npm install mcparmor
+   │
+M5 Launch ─── depends on M2 + M3 + docs + showcases ──────► HN post
 ```
 
-**Can be parallelized:**
-- M3 Python SDK and M4 Node SDK build in parallel after M2
-- Community profiles (`profiles/community/`) can be written any time after M0
-- Documentation can be written alongside M1/M2
-- `mcparmor init` command (static analysis) can be built independently after M2
-
 **Minimum viable v1 (fastest path to launch):**
-M0 → M1 → M2 → M3 only. Skip M4 (Node SDK) for initial launch. Add post-launch.
+M0 → M1 → M2 → M3 → showcases + docs → launch.
+Node SDK (M4) can ship one week post-launch.
 
 ---
 
@@ -725,13 +775,12 @@ M0 → M1 → M2 → M3 only. Skip M4 (Node SDK) for initial launch. Add post-la
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Enforcement mechanism | Stdio proxy + Python trampoline | Cross-platform, no OS dependencies, covers full Arqitect tool library |
-| Policy location | Manifest per tool | Travels with the tool, community-reviewable, no central proxy needed |
-| Broker language | Rust | Single binary, cross-platform, fast, zero runtime deps |
-| Python interception | Monkey-patch socket.getaddrinfo | Covers all network libs (requests, httpx, urllib) with one hook |
-| Secret scanning | Regex set on all responses | Extends proven Arqitect patterns, runs in Rust for speed |
-| Audit log format | JSONL append-only | Queryable, tamper-evident, no DB dependency |
-| Node SDK timing | Post-launch (M4) | Python covers Arqitect. Node is secondary for v1. |
-| OS primitives | Belt-and-suspenders (v2) | Don't block launch on OS-specific work. Broker works everywhere today. |
-| Symlink handling | Always resolve before checking | Prevents symlink escape attacks (link /tmp/safe → /etc/passwd) |
-| Profile override | Allowed unless `locked: true` | Fabricated tools lock themselves. Community tools can be relaxed by host. |
+| Manifest file | Standalone `armor.json` | Framework-agnostic. Any tool, any packaging. |
+| Broker mechanism | Stdio proxy only (no trampolines in core) | Language-agnostic. Works with any subprocess. |
+| Integration primitive | `armor_popen` / `armorSpawn` | One-line change for any framework. Same interface as stdlib. |
+| Param inspection | Validate path/URL values before forwarding | Catches the attack vector before the tool sees it. |
+| Secret scanner | Rust regex set on all responses | Fast, cross-language, runs regardless of tool implementation. |
+| OS primitives | Optional, v2, behind a flag | Don't block launch. Broker is sufficient for v1. |
+| Test language coverage | Python + Node + Go adversarial tools | Proves broker is truly language-agnostic. |
+| Showcases location | `showcases/` not `docs/` | Working code, not prose. Frameworks copy-paste from here. |
+| Arqitect references | Showcase only, not in core | MCP Armor is neutral infrastructure. Arqitect is one consumer. |
