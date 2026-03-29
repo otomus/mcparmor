@@ -23,7 +23,7 @@ MCP Armor changes that.
 
 ```sh
 # macOS
-brew tap otomus/mcparmor && brew install mcparmor
+brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install mcparmor
 
 # Linux
 curl -sSfL https://install.mcp-armor.com | sh

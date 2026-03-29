@@ -17,7 +17,7 @@ export default function InstallationPage(): ReactNode {
       </h1>
 
       <Section title="macOS (Homebrew)">
-        <CodeBlock code="brew tap otomus/mcparmor && brew install mcparmor" lang="bash" />
+        <CodeBlock code="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install mcparmor" lang="bash" />
         <p className="mt-3 text-sm" style={{ color: "var(--color-text-secondary)" }}>
           Requires macOS 12+. Full enforcement including Seatbelt sandbox.
         </p>

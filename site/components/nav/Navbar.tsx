@@ -75,7 +75,7 @@ function InstallButton(): ReactNode {
       >
         brew install mcparmor
       </span>
-      <CopyButton text="brew install mcparmor" />
+      <CopyButton text="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install mcparmor" />
     </div>
   );
 }

@@ -9,7 +9,7 @@ const INSTALL_TABS = [
     label: "macOS",
     content: (
       <CodeBlock
-        code="brew tap otomus/mcparmor && brew install mcparmor"
+        code="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install mcparmor"
         lang="bash"
       />
     ),
