@@ -1,35 +1,31 @@
 name: Homebrew Tap Update
 
-# Triggered automatically after a successful release so the tap always tracks
-# the latest published version without manual intervention.
+# Triggered automatically after a successful release so the formula
+# always tracks the latest published version.
 on:
   workflow_run:
     workflows: [Release]
     types: [completed]
 
-# Deploy key setup (one-time, performed by a repo admin):
-#   1. Generate a key pair: ssh-keygen -t ed25519 -C "mcparmor homebrew tap deploy key" -f tap_deploy
-#   2. Add the PUBLIC key as a Deploy Key with write access on
-#      github.com/otomus/homebrew-mcparmor (Settings -> Deploy keys -> Add deploy key).
-#   3. Add the PRIVATE key as a repository secret named HOMEBREW_TAP_TOKEN on
-#      github.com/otomus/mcparmor (Settings -> Secrets -> Actions -> New secret).
+permissions:
+  contents: write
 
 jobs:
   update-tap:
-    name: Update homebrew-mcparmor formula
+    name: Update Formula/mcparmor.rb
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Only run when the Release workflow succeeded
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Resolve release tag from triggering workflow
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
         id: tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The workflow_run event does not expose the tag directly.
-          # We resolve it by finding the latest published release.
           tag=$(gh release list --repo "${{ github.repository }}" --limit 1 --json tagName --jq '.[0].tagName')
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Resolved release tag: $tag"
@@ -47,27 +43,15 @@ jobs:
             --pattern "checksums.sha256" \
             --dir release-artifacts
 
-      - name: Extract darwin SHA256 values
+      - name: Extract SHA256 values
         id: sha
         run: |
           arm64_sha=$(grep "mcparmor-macos-arm64"  release-artifacts/checksums.sha256 | awk '{print $1}')
           x86_64_sha=$(grep "mcparmor-macos-x86_64" release-artifacts/checksums.sha256 | awk '{print $1}')
           echo "arm64=$arm64_sha"   >> "$GITHUB_OUTPUT"
           echo "x86_64=$x86_64_sha" >> "$GITHUB_OUTPUT"
-          echo "arm64 SHA256:  $arm64_sha"
-          echo "x86_64 SHA256: $x86_64_sha"
 
-      - name: Checkout homebrew tap
-        uses: actions/checkout@v4
-        with:
-          repository: otomus/homebrew-mcparmor
-          # HOMEBREW_TAP_TOKEN must be the SSH private key corresponding to the
-          # deploy key registered on the homebrew-mcparmor repository (see setup
-          # instructions at the top of this file).
-          ssh-key: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: homebrew-tap
-
-      - name: Update Formula/mcparmor.rb
+      - name: Update formula
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${TAG#v}"
@@ -75,9 +59,7 @@ jobs:
           X86_64_SHA="${{ steps.sha.outputs.x86_64 }}"
           BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
 
-          FORMULA="homebrew-tap/Formula/mcparmor.rb"
-
-          python3 - "$FORMULA" "$VERSION" "$ARM64_SHA" "$X86_64_SHA" "$BASE_URL" <<'PYEOF'
+          python3 - Formula/mcparmor.rb "$VERSION" "$ARM64_SHA" "$X86_64_SHA" "$BASE_URL" <<'PYEOF'
           import re, sys
 
           formula_path, version, arm64_sha, x86_64_sha, base_url = sys.argv[1:]
@@ -85,10 +67,8 @@ jobs:
           with open(formula_path) as f:
               content = f.read()
 
-          # Update version string
           content = re.sub(r'version "[^"]*"', f'version "{version}"', content)
 
-          # Update arm64 (Apple Silicon) url and sha256
           content = re.sub(
               r'(if Hardware::CPU\.arm\?.*?url ")[^"]*(")',
               rf'\g<1>{base_url}/mcparmor-macos-arm64\2',
@@ -100,7 +80,6 @@ jobs:
               content, flags=re.DOTALL,
           )
 
-          # Update x86_64 (Intel) url and sha256
           content = re.sub(
               r'(else.*?url ")[^"]*(")',
               rf'\g<1>{base_url}/mcparmor-macos-x86_64\2',
@@ -118,12 +97,11 @@ jobs:
           print(f"Formula updated to version {version}")
           PYEOF
 
-      - name: Commit and push to tap
+      - name: Commit and push
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          cd homebrew-tap
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/mcparmor.rb
-          git commit -m "chore: update mcparmor to ${TAG}"
+          git commit -m "chore: update mcparmor formula to ${TAG}"
           git push
