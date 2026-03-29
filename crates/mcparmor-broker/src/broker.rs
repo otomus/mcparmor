@@ -945,8 +945,17 @@ pub async fn wrap(args: WrapArgs) -> Result<()> {
 
     let host = args.host.as_deref().unwrap_or("");
     let path = resolve_host_config_path(host, args.config.as_deref())?;
-    let content = fs::read_to_string(&path)
-        .with_context(|| format!("Cannot read host config: {}", path.display()))?;
+    let content = if path.exists() {
+        fs::read_to_string(&path)
+            .with_context(|| format!("Cannot read host config: {}", path.display()))?
+    } else {
+        // Create parent directories so the config can be persisted later.
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Cannot create directory: {}", parent.display()))?;
+        }
+        "{}".to_string()
+    };
     let mut config: Value = serde_json::from_str(&content)?;
 
     let servers = get_mcp_servers_mut(&mut config)?;
