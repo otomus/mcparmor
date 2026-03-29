@@ -28,7 +28,10 @@ jobs:
         with:
           node-version: 22
 
-      - run: npm install
+      - name: Install npm 10.9.2 and dependencies
+        run: |
+          npm install -g npm@10.9.2
+          npm ci
 
       - run: npm run build
 
