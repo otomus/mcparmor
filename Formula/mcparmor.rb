@@ -1,15 +1,15 @@
 class Mcparmor < Formula
   desc "Capability enforcement for MCP tools — kernel-level sandboxing"
   homepage "https://github.com/otomus/mcparmor"
-  version "0.1.0"
+  version "0.1.1"
   license "MIT"
 
   if Hardware::CPU.arm?
-    url "https://github.com/otomus/mcparmor/releases/download/v0.1.0/mcparmor-macos-arm64"
-    sha256 "6186bdfeabdb664b66d1da9c1642e5393518d30a5b3b196a98bde0f4260cb8e7"
+    url "https://github.com/otomus/mcparmor/releases/download/v0.1.1/mcparmor-macos-arm64"
+    sha256 "a701c520ff95f45cde02e24cbacbc31cc6c96b92a5d8980b3d96c209380694ab"
   else
-    url "https://github.com/otomus/mcparmor/releases/download/v0.1.0/mcparmor-macos-x86_64"
-    sha256 "23fa34590e4f4889e70a1d23df29e51e8aaa539b9eed189eb316c60e1e264584"
+    url "https://github.com/otomus/mcparmor/releases/download/v0.1.1/mcparmor-macos-x86_64"
+    sha256 "eb27a5e2fc40d1293758df1dcc05007a045f739f65921b07f73d17c2d1dde34b"
   end
 
   def install
