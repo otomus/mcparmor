@@ -6,10 +6,10 @@ class Mcparmor < Formula
 
   if Hardware::CPU.arm?
     url "https://github.com/otomus/mcparmor/releases/download/v0.1.0/mcparmor-macos-arm64"
-    sha256 "PLACEHOLDER_ARM64_SHA256"
+    sha256 "6186bdfeabdb664b66d1da9c1642e5393518d30a5b3b196a98bde0f4260cb8e7"
   else
     url "https://github.com/otomus/mcparmor/releases/download/v0.1.0/mcparmor-macos-x86_64"
-    sha256 "PLACEHOLDER_X86_64_SHA256"
+    sha256 "23fa34590e4f4889e70a1d23df29e51e8aaa539b9eed189eb316c60e1e264584"
   end
 
   def install
