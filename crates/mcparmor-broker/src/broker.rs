@@ -121,6 +121,7 @@ pub async fn run(args: RunArgs) -> Result<()> {
         strict_mode: args.strict,
         verbose: args.verbose,
         tool_name,
+        annotate: !args.no_annotate,
     };
 
     run_proxy(config, &args.command).await

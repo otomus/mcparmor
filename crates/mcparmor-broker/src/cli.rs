@@ -90,6 +90,12 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_audit: bool,
 
+    /// Disable tool description annotation in tools/list responses.
+    /// By default, the broker appends a shield indicator to each tool's
+    /// description so the host UI shows which tools are protected.
+    #[arg(long)]
+    pub no_annotate: bool,
+
     /// The tool command and arguments, separated from broker args by `--`.
     #[arg(last = true, required = true)]
     pub command: Vec<String>,

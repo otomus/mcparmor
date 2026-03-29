@@ -10,12 +10,14 @@ use mcparmor_core::errors::BrokerError;
 use mcparmor_core::manifest::{ArmorManifest, SecretScanMode};
 use mcparmor_core::scanner;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::Mutex;
 
 #[cfg(unix)]
 use libc;
@@ -33,6 +35,9 @@ const EXIT_CODE_COMMAND_NOT_FOUND: i32 = 127;
 /// Seconds to wait for graceful SIGTERM before sending SIGKILL on timeout.
 const SIGTERM_GRACE_PERIOD_SECS: u64 = 2;
 
+/// Suffix appended to tool descriptions when annotation is enabled.
+const ARMOR_ANNOTATION: &str = " [🛡 MCP Armor]";
+
 /// Shared configuration for the host-to-tool and tool-to-host forwarding tasks.
 ///
 /// Bundles the manifest, audit writer, and logging flags so they can be passed
@@ -49,6 +54,10 @@ struct ForwardConfig {
     strict_mode: bool,
     /// When true, prints allow/deny decisions to stderr for each message.
     verbose: bool,
+    /// When true, annotates tool descriptions in `tools/list` responses with a shield indicator.
+    annotate: bool,
+    /// Request IDs of `tools/list` messages, used to identify matching responses.
+    tools_list_ids: Arc<Mutex<HashSet<String>>>,
 }
 
 /// Configuration for the stdio proxy loop.
@@ -71,6 +80,9 @@ pub struct ProxyConfig {
     pub verbose: bool,
     /// Display name of the tool (derived from argv[0]) used in audit log entries.
     pub tool_name: String,
+    /// When true, annotates tool descriptions in `tools/list` responses with a
+    /// shield indicator so the host UI shows which tools are protected.
+    pub annotate: bool,
 }
 
 /// Run the stdio proxy for the given tool command under the manifest policy.
@@ -93,6 +105,8 @@ pub struct ProxyConfig {
 pub async fn run_proxy(config: ProxyConfig, tool_command: &[String]) -> Result<()> {
     let (program, args) = split_command(tool_command)?;
     let sandboxed = config.sandbox.apply(&config.manifest, program, args)?;
+
+    print_startup_banner(&config);
 
     let (mut child, spawn_time) = spawn_tool_process(&config, &sandboxed)?;
 
@@ -154,6 +168,8 @@ fn make_forward_config(config: &ProxyConfig) -> ForwardConfig {
         no_log_params: config.no_log_params,
         strict_mode: config.strict_mode,
         verbose: config.verbose,
+        annotate: config.annotate,
+        tools_list_ids: Arc::new(Mutex::new(HashSet::new())),
     }
 }
 
@@ -256,6 +272,11 @@ async fn forward_host_to_tool(
             continue;
         };
 
+        // Track tools/list request IDs so the return path can annotate responses.
+        if config.annotate {
+            track_tools_list_id(&message, &config.tools_list_ids).await;
+        }
+
         match inspect::check_message(&message, &config.manifest) {
             InspectResult::Allow => {
                 if handle_allowed_message(&config, &message, &line, &mut tool_stdin).await {
@@ -295,12 +316,12 @@ async fn handle_allowed_message(
 
 /// Handle a message that was denied: log, audit, and send a JSON-RPC error response.
 ///
-/// In strict mode, exits the process with code 2 after sending the error response.
+/// Denials are always printed to stderr because they represent security-relevant
+/// enforcement events. In strict mode, exits the process with code 2 after
+/// sending the error response.
 async fn handle_denied_message(config: &ForwardConfig, message: &Value, err: mcparmor_core::errors::BrokerError) {
-    if config.verbose {
-        let method = message.get("method").and_then(|v| v.as_str()).unwrap_or("unknown");
-        eprintln!("[mcparmor] DENY {method} ({})", err.message);
-    }
+    let method = message.get("method").and_then(|v| v.as_str()).unwrap_or("unknown");
+    eprintln!("[mcparmor] BLOCKED {method} — {}", err.message);
     write_violation_audit(message, &err, &config.manifest, &config.audit_writer);
     let error_response = build_error_response(message, err);
     if let Err(e) = write_json_to_stdout(&error_response).await {
@@ -326,6 +347,14 @@ async fn forward_tool_to_host(
         }
 
         let start = Instant::now();
+
+        // Annotate tools/list responses with the MCP Armor shield indicator.
+        let line = if config.annotate {
+            annotate_tools_list_response(&line, &config.tools_list_ids).await
+        } else {
+            line
+        };
+
         let processed = process_response(&line, &config.manifest, &config.audit_writer, &tool_name);
         // Cap at u64::MAX (≈584 million years) to avoid wrapping on pathological inputs.
         let latency_ms = start.elapsed().as_millis().min(u64::MAX as u128) as u64;
@@ -675,6 +704,108 @@ async fn kill_child_gracefully(child: &mut tokio::process::Child) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Runtime protection indication
+// ---------------------------------------------------------------------------
+
+/// Print a startup banner to stderr showing the tool's protection status.
+///
+/// This provides immediate visual feedback that the broker is active and
+/// which enforcement layers are protecting the tool.
+fn print_startup_banner(config: &ProxyConfig) {
+    let summary = config.sandbox.enforcement_summary();
+    let profile = format!("{:?}", config.manifest.profile).to_lowercase();
+    let layers = build_layer_description(&summary);
+
+    eprintln!(
+        "[mcparmor] {} protected | profile: {} | layers: {}",
+        config.tool_name, profile, layers
+    );
+}
+
+/// Build a human-readable description of the active enforcement layers.
+fn build_layer_description(summary: &crate::sandbox::EnforcementSummary) -> String {
+    let mut parts = vec!["protocol"];
+
+    if summary.filesystem_isolation
+        || summary.spawn_blocking
+        || summary.network_port_enforcement
+        || summary.network_hostname_enforcement
+    {
+        parts.push(&summary.mechanism);
+    }
+
+    parts.join("+")
+}
+
+/// Record the `id` of a `tools/list` request so the response can be annotated.
+async fn track_tools_list_id(message: &Value, ids: &Arc<Mutex<HashSet<String>>>) {
+    let method = message.get("method").and_then(Value::as_str).unwrap_or("");
+    if method != "tools/list" {
+        return;
+    }
+    if let Some(id) = message.get("id") {
+        let id_str = serde_json::to_string(id).unwrap_or_default();
+        ids.lock().await.insert(id_str);
+    }
+}
+
+/// If the response matches a `tools/list` request, annotate each tool's description
+/// with a shield indicator so the host UI shows protection status.
+///
+/// Returns the (possibly modified) line. Non-matching responses are returned unchanged.
+async fn annotate_tools_list_response(
+    line: &str,
+    ids: &Arc<Mutex<HashSet<String>>>,
+) -> String {
+    let Ok(mut response) = serde_json::from_str::<Value>(line) else {
+        return line.to_string();
+    };
+
+    // Check if this response's id matches a tracked tools/list request.
+    let id = response.get("id");
+    let id_str = id
+        .map(|v| serde_json::to_string(v).unwrap_or_default())
+        .unwrap_or_default();
+
+    let is_tools_list = ids.lock().await.remove(&id_str);
+    if !is_tools_list {
+        return line.to_string();
+    }
+
+    // Annotate each tool's description in the result.tools array.
+    if let Some(tools) = response
+        .get_mut("result")
+        .and_then(|r| r.get_mut("tools"))
+        .and_then(Value::as_array_mut)
+    {
+        for tool in tools {
+            annotate_tool_description(tool);
+        }
+
+        if let Ok(annotated) = serde_json::to_string(&response) {
+            return annotated;
+        }
+    }
+
+    line.to_string()
+}
+
+/// Append the armor shield indicator to a single tool's description field.
+fn annotate_tool_description(tool: &mut Value) {
+    let desc = tool
+        .get("description")
+        .and_then(Value::as_str)
+        .map(String::from);
+
+    if let Some(desc) = desc {
+        // Avoid double-annotation if the proxy is nested.
+        if !desc.contains(ARMOR_ANNOTATION) {
+            tool["description"] = Value::String(format!("{desc}{ARMOR_ANNOTATION}"));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -998,10 +1129,12 @@ mod tests {
             strict_mode: false,
             verbose: false,
             tool_name: "test-tool".to_string(),
+            annotate: true,
         };
 
         assert!(!config.strict_mode, "strict_mode must default to false");
         assert!(!config.verbose, "verbose must default to false");
+        assert!(config.annotate, "annotate must default to true");
     }
 
     #[test]
@@ -1040,10 +1173,170 @@ mod tests {
             strict_mode: true,
             verbose: true,
             tool_name: "test-tool".to_string(),
+            annotate: true,
         };
 
         assert!(config.strict_mode, "strict_mode must be true when set");
         assert!(config.verbose, "verbose must be true when set");
+    }
+
+    // ---------------------------------------------------------------------------
+    // annotate_tool_description
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn annotate_tool_description_appends_shield_to_description() {
+        let mut tool = json!({
+            "name": "read_file",
+            "description": "Read the contents of a file"
+        });
+        annotate_tool_description(&mut tool);
+        assert_eq!(
+            tool["description"],
+            "Read the contents of a file [🛡 MCP Armor]"
+        );
+    }
+
+    #[test]
+    fn annotate_tool_description_does_not_double_annotate() {
+        let mut tool = json!({
+            "name": "read_file",
+            "description": "Read a file [🛡 MCP Armor]"
+        });
+        annotate_tool_description(&mut tool);
+        assert_eq!(
+            tool["description"],
+            "Read a file [🛡 MCP Armor]",
+            "must not double-annotate"
+        );
+    }
+
+    #[test]
+    fn annotate_tool_description_skips_tool_without_description() {
+        let mut tool = json!({ "name": "ping" });
+        annotate_tool_description(&mut tool);
+        assert!(tool.get("description").is_none(), "must not add description if absent");
+    }
+
+    // ---------------------------------------------------------------------------
+    // annotate_tools_list_response
+    // ---------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn annotate_tools_list_response_annotates_matching_response() {
+        let ids = Arc::new(Mutex::new(HashSet::new()));
+        ids.lock().await.insert("1".to_string());
+
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "tools": [
+                    { "name": "read_file", "description": "Read a file" },
+                    { "name": "write_file", "description": "Write a file" }
+                ]
+            }
+        });
+        let line = serde_json::to_string(&response).unwrap();
+
+        let result = annotate_tools_list_response(&line, &ids).await;
+        let parsed: Value = serde_json::from_str(&result).unwrap();
+
+        assert!(
+            parsed["result"]["tools"][0]["description"]
+                .as_str()
+                .unwrap()
+                .contains(ARMOR_ANNOTATION),
+            "first tool must be annotated"
+        );
+        assert!(
+            parsed["result"]["tools"][1]["description"]
+                .as_str()
+                .unwrap()
+                .contains(ARMOR_ANNOTATION),
+            "second tool must be annotated"
+        );
+    }
+
+    #[tokio::test]
+    async fn annotate_tools_list_response_ignores_non_matching_id() {
+        let ids = Arc::new(Mutex::new(HashSet::new()));
+        ids.lock().await.insert("99".to_string());
+
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "tools": [{ "name": "read_file", "description": "Read a file" }]
+            }
+        });
+        let line = serde_json::to_string(&response).unwrap();
+
+        let result = annotate_tools_list_response(&line, &ids).await;
+        assert_eq!(result, line, "non-matching response must be unchanged");
+    }
+
+    #[tokio::test]
+    async fn annotate_tools_list_response_handles_malformed_json() {
+        let ids = Arc::new(Mutex::new(HashSet::new()));
+        let result = annotate_tools_list_response("not json", &ids).await;
+        assert_eq!(result, "not json", "malformed JSON must be returned as-is");
+    }
+
+    // ---------------------------------------------------------------------------
+    // track_tools_list_id
+    // ---------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn track_tools_list_id_records_id_for_tools_list_method() {
+        let ids = Arc::new(Mutex::new(HashSet::new()));
+        let message = json!({ "jsonrpc": "2.0", "method": "tools/list", "id": 42 });
+        track_tools_list_id(&message, &ids).await;
+        assert!(ids.lock().await.contains("42"), "id must be tracked");
+    }
+
+    #[tokio::test]
+    async fn track_tools_list_id_ignores_non_tools_list_method() {
+        let ids = Arc::new(Mutex::new(HashSet::new()));
+        let message = json!({ "jsonrpc": "2.0", "method": "tools/call", "id": 42 });
+        track_tools_list_id(&message, &ids).await;
+        assert!(ids.lock().await.is_empty(), "non-tools/list must not be tracked");
+    }
+
+    #[tokio::test]
+    async fn track_tools_list_id_handles_string_id() {
+        let ids = Arc::new(Mutex::new(HashSet::new()));
+        let message = json!({ "jsonrpc": "2.0", "method": "tools/list", "id": "req-1" });
+        track_tools_list_id(&message, &ids).await;
+        assert!(ids.lock().await.contains("\"req-1\""), "string id must be tracked");
+    }
+
+    // ---------------------------------------------------------------------------
+    // build_layer_description
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn build_layer_description_protocol_only_when_no_os_enforcement() {
+        let summary = crate::sandbox::EnforcementSummary {
+            filesystem_isolation: false,
+            spawn_blocking: false,
+            network_port_enforcement: false,
+            network_hostname_enforcement: false,
+            mechanism: "none".to_string(),
+        };
+        assert_eq!(build_layer_description(&summary), "protocol");
+    }
+
+    #[test]
+    fn build_layer_description_includes_mechanism_when_os_enforced() {
+        let summary = crate::sandbox::EnforcementSummary {
+            filesystem_isolation: true,
+            spawn_blocking: true,
+            network_port_enforcement: false,
+            network_hostname_enforcement: true,
+            mechanism: "seatbelt".to_string(),
+        };
+        assert_eq!(build_layer_description(&summary), "protocol+seatbelt");
     }
 }
 
