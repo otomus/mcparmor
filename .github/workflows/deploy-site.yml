@@ -30,7 +30,7 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
-      - run: npm ci
+      - run: npm ci || (npm cache clean --force && npm ci)
 
       - run: npm run build
 
