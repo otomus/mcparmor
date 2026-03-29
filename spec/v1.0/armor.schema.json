@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mcp-armor.com/spec/v1.0/armor.schema.json",
+  "title": "MCP Armor Manifest",
+  "description": "Schema for armor.json — the MCP Armor security profile manifest. Declares the capability sandbox, network rules, filesystem access, audit configuration, and output scanning for a single MCP tool invocation context. Profiles: strict (no filesystem/network/spawn/env), sandboxed (filesystem+network as declared, no spawn), network (network-only, no local filesystem), system (trusted tool, all capabilities explicitly declared), browser (network access with deny_local implicitly false for CDP/local server access; setting deny_local: true issues a validation warning).",
+  "type": "object",
+  "required": ["$schema", "version", "profile"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Must equal the canonical MCP Armor v1.0 schema URI. Identifies the spec version this manifest targets.",
+      "const": "https://mcp-armor.com/spec/v1.0/armor.schema.json"
+    },
+    "version": {
+      "type": "string",
+      "description": "The version of this armor.json manifest, in MAJOR.MINOR format (e.g. \"1.0\"). Incremented when the manifest itself changes.",
+      "pattern": "^\\d+\\.\\d+$"
+    },
+    "min_spec": {
+      "type": "string",
+      "description": "Minimum MCP Armor broker spec version required to correctly interpret and enforce this profile, in MAJOR.MINOR format. Brokers older than this value must refuse to load the manifest.",
+      "pattern": "^\\d+\\.\\d+$"
+    },
+    "profile": {
+      "type": "string",
+      "description": "The named capability profile applied to this tool. Determines the baseline security posture: strict (maximum restriction — no filesystem, network, spawn, or env passthrough), sandboxed (filesystem and network access as declared, no spawn), network (network-only tool, no local filesystem access), system (fully trusted tool where all capabilities must be explicitly declared), browser (network access with deny_local implicitly false to allow CDP and local server connections; setting deny_local: true alongside this profile issues a validation warning).",
+      "enum": ["strict", "sandboxed", "network", "system", "browser"]
+    },
+    "locked": {
+      "type": "boolean",
+      "description": "When true, the broker ignores any --profile flag passed at invocation time and treats this manifest's profile as authoritative. This is a cooperative lock — it does not prevent a privileged operator from overriding at the system level.",
+      "default": false
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "description": "Maximum wall-clock time in milliseconds allowed for a single tool call. The broker terminates the call and returns an error if this duration is exceeded. Must be between 100 ms and 300,000 ms (5 minutes).",
+      "minimum": 100,
+      "maximum": 300000
+    },
+    "filesystem": {
+      "type": "object",
+      "description": "Declares the filesystem access policy for this tool. Omitting this object denies all filesystem access. Each field accepts glob patterns evaluated at call time against the absolute path of the resource being accessed.",
+      "additionalProperties": false,
+      "properties": {
+        "read": {
+          "type": "array",
+          "description": "Glob patterns for filesystem paths the tool is allowed to read. Any read attempt against a path not matched by at least one pattern is blocked. Example: [\"/tmp/mcparmor/*\"].",
+          "items": {
+            "type": "string",
+            "description": "A glob pattern representing a readable path or path prefix."
+          }
+        },
+        "write": {
+          "type": "array",
+          "description": "Glob patterns for filesystem paths the tool is allowed to write or create. Any write attempt against a path not matched by at least one pattern is blocked. Example: [\"/tmp/mcparmor/*\"].",
+          "items": {
+            "type": "string",
+            "description": "A glob pattern representing a writable path or path prefix."
+          }
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "description": "Declares the network egress policy for this tool. Omitting this object denies all outbound network access. Rules are evaluated in order: deny_local and deny_metadata are checked first, then the allow list.",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "description": "Explicit list of host:port combinations the tool may connect to. Each entry must be in the form HOST:PORT where HOST is a literal hostname, a subdomain wildcard (*.example.com), or a bare wildcard (*) and PORT is a port number or *. The combination *:* is not permitted.",
+          "items": {
+            "type": "string",
+            "description": "A host:port rule in the form HOST:PORT. Valid examples: \"api.github.com:443\", \"*.github.com:443\", \"api.github.com:*\", \"*:443\". Invalid: \"*:*\" (unrestricted access — use a specific port like *:443 instead).",
+            "pattern": "^((\\*\\.[a-zA-Z0-9.-]+|[a-zA-Z0-9.-]+):(\\*|[0-9]{1,5})|\\*:[0-9]{1,5})$"
+          }
+        },
+        "deny_local": {
+          "type": "boolean",
+          "description": "When true (the default), the broker blocks all outbound connections to loopback addresses (127.0.0.0/8 and ::1). Set to false only when the tool must reach a local service such as a browser CDP endpoint. Note: for the browser profile, this defaults to false; setting it to true in that context issues a validation warning.",
+          "default": true
+        },
+        "deny_metadata": {
+          "type": "boolean",
+          "description": "When true (the default), the broker blocks all outbound connections to cloud instance metadata endpoints (169.254.0.0/16), preventing credential theft via SSRF against AWS, GCP, Azure, and similar platforms.",
+          "default": true
+        }
+      }
+    },
+    "spawn": {
+      "type": "boolean",
+      "description": "Whether the tool is permitted to spawn child processes. When false (the default), any attempt to fork or exec a subprocess is blocked by the broker. Enable only for tools that explicitly require shell or process execution.",
+      "default": false
+    },
+    "env": {
+      "type": "object",
+      "description": "Declares the environment variable policy for this tool. By default all environment variables are stripped from the tool's execution context at spawn time. Only variables named in the allow list are forwarded.",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "description": "Names of environment variables that the broker will forward to the tool at spawn time. All other environment variables present in the parent process are stripped before the tool starts.",
+          "items": {
+            "type": "string",
+            "description": "The exact name of an environment variable to forward, e.g. \"GITHUB_TOKEN\"."
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "description": "Controls post-processing applied to tool output before it is returned to the caller. Includes secret scanning and response size limits.",
+      "additionalProperties": false,
+      "properties": {
+        "scan_secrets": {
+          "description": "Controls secret detection applied to tool output. false disables scanning entirely. true enables scanning and redacts detected secrets in-place before returning the response. \"strict\" enables scanning and blocks the entire response if any secret is detected, returning an error instead.",
+          "oneOf": [
+            {
+              "type": "boolean",
+              "description": "false disables secret scanning; true enables scanning with in-place redaction of detected secrets."
+            },
+            {
+              "type": "string",
+              "const": "strict",
+              "description": "Enables scanning in strict mode: if any secret is detected the entire response is blocked and an error is returned instead of redacted output."
+            }
+          ]
+        },
+        "max_size_kb": {
+          "type": "integer",
+          "description": "Maximum permitted size of the tool's response in kilobytes. Responses exceeding this limit are truncated before delivery to the caller. Must be between 1 KB and 102,400 KB (100 MB).",
+          "minimum": 1,
+          "maximum": 102400
+        }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "description": "Configures audit logging for tool invocations. Audit records capture call metadata (tool name, timestamp, caller identity, param keys) and are written to the broker's audit sink.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether audit logging is active for this tool. Defaults to true. Setting to false suppresses all audit records for this tool's invocations.",
+          "default": true
+        },
+        "retention_days": {
+          "type": "integer",
+          "description": "Number of days audit records for this tool are retained before automatic deletion. Must be between 1 and 365.",
+          "minimum": 1,
+          "maximum": 365
+        },
+        "max_size_mb": {
+          "type": "integer",
+          "description": "Maximum total size in megabytes of stored audit logs for this tool before the oldest records are rotated out. Must be between 1 MB and 10,240 MB (10 GB).",
+          "minimum": 1,
+          "maximum": 10240
+        },
+        "redact_params": {
+          "type": "boolean",
+          "description": "When true, parameter values are omitted from audit log entries and only parameter keys are recorded. Use this to prevent sensitive input values (e.g. secrets passed as arguments) from appearing in audit storage.",
+          "default": false
+        }
+      }
+    },
+    "_source": {
+      "type": "string",
+      "description": "Provenance marker indicating the origin of this profile. Conventional values include \"team-authored\" and \"community\". Used by tooling and registries to distinguish internally produced profiles from externally contributed ones."
+    },
+    "_reviewed_by": {
+      "type": "string",
+      "description": "Identity of the person or system that reviewed and approved this profile, e.g. a GitHub username or service account name."
+    },
+    "_reviewed_at": {
+      "type": "string",
+      "description": "ISO 8601 date (or date-time) on which this profile was last reviewed and approved, e.g. \"2026-03-27\" or \"2026-03-27T14:00:00Z\"."
+    }
+  },
+  "examples": [
+    {
+      "$schema": "https://mcp-armor.com/spec/v1.0/armor.schema.json",
+      "version": "1.0",
+      "profile": "sandboxed",
+      "filesystem": {
+        "read": ["/tmp/mcparmor/*"],
+        "write": ["/tmp/mcparmor/*"]
+      },
+      "network": {
+        "allow": ["api.github.com:443"],
+        "deny_local": true,
+        "deny_metadata": true
+      },
+      "spawn": false,
+      "env": {
+        "allow": ["GITHUB_TOKEN"]
+      },
+      "output": {
+        "scan_secrets": true
+      },
+      "timeout_ms": 30000,
+      "locked": false
+    }
+  ]
+}

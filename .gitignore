@@ -1,0 +1,14 @@
+/target
+*.DS_Store
+.env
+dist/
+site/dist/
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist-info/
+
+# Internal planning docs — not for public repo
+internal-docs/

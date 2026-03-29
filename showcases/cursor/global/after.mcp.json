@@ -1,0 +1,45 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "mcparmor",
+      "args": [
+        "run",
+        "--armor",
+        "/Users/alice/.mcparmor/profiles/community/filesystem.armor.json",
+        "--",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/alice/projects/myapp"
+      ]
+    },
+    "github": {
+      "command": "mcparmor",
+      "args": [
+        "run",
+        "--armor",
+        "/Users/alice/.mcparmor/profiles/community/github.armor.json",
+        "--",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxxxxxxxxxxxxxxxxxxx"
+      }
+    },
+    "git": {
+      "command": "mcparmor",
+      "args": [
+        "run",
+        "--armor",
+        "/Users/alice/.mcparmor/profiles/community/git.armor.json",
+        "--",
+        "uvx",
+        "mcp-server-git",
+        "--repository",
+        "/Users/alice/projects/myapp"
+      ]
+    }
+  }
+}

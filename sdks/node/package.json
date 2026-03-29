@@ -1,0 +1,35 @@
+{
+  "name": "mcparmor",
+  "version": "0.1.0",
+  "description": "MCP Armor — capability enforcement for MCP tools",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types --experimental-test-module-mocks tests/*.test.ts"
+  },
+  "optionalDependencies": {
+    "mcparmor-darwin-arm64": "0.1.0",
+    "mcparmor-darwin-x64": "0.1.0",
+    "mcparmor-linux-arm64": "0.1.0",
+    "mcparmor-linux-x64": "0.1.0",
+    "mcparmor-win32-x64": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/otomus/mcparmor"
+  },
+  "license": "MIT"
+}

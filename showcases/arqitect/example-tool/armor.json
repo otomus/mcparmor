@@ -1,0 +1,25 @@
+{
+  "$schema": "https://mcp-armor.com/spec/v1.0/armor.schema.json",
+  "version": "1.0",
+  "min_spec": "1.0",
+  "profile": "network",
+  "locked": false,
+  "network": {
+    "allow": [
+      "api.frankfurter.app:443"
+    ],
+    "deny_local": true,
+    "deny_metadata": true
+  },
+  "spawn": false,
+  "env": {
+    "allow": []
+  },
+  "output": {
+    "scan_secrets": true
+  },
+  "audit": {
+    "enabled": true,
+    "redact_params": false
+  }
+}

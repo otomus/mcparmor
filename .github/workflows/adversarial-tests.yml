@@ -1,0 +1,124 @@
+name: Adversarial Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - crates/**
+      - tests/adversarial/**
+  pull_request:
+    branches: [main]
+    paths:
+      - crates/**
+      - tests/adversarial/**
+
+jobs:
+  adversarial-linux:
+    name: Adversarial tests (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Go 1.22
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: linux-adversarial-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build broker
+        run: cargo build --release
+
+      - name: Build adversarial Go tools
+        working-directory: tests/adversarial
+        run: |
+          set -euo pipefail
+          for tool_dir in */; do
+            tool_name="${tool_dir%/}"
+            if [ -f "${tool_dir}tool.go" ]; then
+              echo "Building: ${tool_name}"
+              go build -o "${tool_dir}tool" "./${tool_dir}tool.go"
+            fi
+          done
+
+      - name: Run adversarial tests
+        run: |
+          python3 tests/adversarial/run_tests.py \
+            --broker ./target/release/mcparmor \
+            --json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adversarial-results-linux
+          path: adversarial-results.json
+
+  adversarial-macos:
+    name: Adversarial tests (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Go 1.22
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: macos-adversarial-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build broker
+        run: cargo build --release
+
+      - name: Build adversarial Go tools
+        working-directory: tests/adversarial
+        run: |
+          set -euo pipefail
+          for tool_dir in */; do
+            tool_name="${tool_dir%/}"
+            if [ -f "${tool_dir}tool.go" ]; then
+              echo "Building: ${tool_name}"
+              go build -o "${tool_dir}tool" "./${tool_dir}tool.go"
+            fi
+          done
+
+      - name: Run adversarial tests
+        run: |
+          python3 tests/adversarial/run_tests.py \
+            --broker ./target/release/mcparmor \
+            --json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adversarial-results-macos
+          path: adversarial-results.json

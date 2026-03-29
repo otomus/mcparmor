@@ -1,0 +1,30 @@
+{
+  "$schema": "https://mcp-armor.com/spec/v1.0/armor.schema.json",
+  "version": "1.0",
+  "min_spec": "1.0",
+  "profile": "network",
+  "locked": false,
+  "network": {
+    "allow": [
+      "slack.com:443",
+      "api.slack.com:443",
+      "files.slack.com:443"
+    ],
+    "deny_local": true,
+    "deny_metadata": true
+  },
+  "spawn": false,
+  "env": {
+    "allow": ["SLACK_BOT_TOKEN"]
+  },
+  "output": {
+    "scan_secrets": "strict"
+  },
+  "audit": {
+    "enabled": true,
+    "redact_params": true
+  },
+  "_source": "team-authored",
+  "_reviewed_by": "mcparmor-core-team",
+  "_reviewed_at": "2026-03-27T00:00:00Z"
+}

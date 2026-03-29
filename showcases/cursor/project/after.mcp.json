@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "mcparmor",
+      "args": [
+        "run",
+        "--armor",
+        "${userHome}/.mcparmor/profiles/community/filesystem.armor.json",
+        "--",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${workspaceFolder}"
+      ]
+    },
+    "git": {
+      "command": "mcparmor",
+      "args": [
+        "run",
+        "--armor",
+        "${userHome}/.mcparmor/profiles/community/git.armor.json",
+        "--",
+        "uvx",
+        "mcp-server-git",
+        "--repository",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}

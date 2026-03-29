@@ -1,0 +1,164 @@
+/*
+ * Animation system for MCP Armor site.
+ *
+ * All animations are CSS-only, triggered by a `data-revealed` attribute
+ * set via Intersection Observer in ScrollReveal.tsx. No third-party
+ * animation libraries.
+ *
+ * `prefers-reduced-motion: reduce` disables all transitions and
+ * shows the final state immediately.
+ */
+
+/* ---- Scroll reveal base ---- */
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-reveal][data-revealed] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---- Stagger children ---- */
+
+[data-stagger] > * {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-stagger][data-revealed] > * {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---- Slide from left ---- */
+
+[data-reveal="left"] {
+  transform: translateX(-24px);
+}
+
+[data-reveal="left"][data-revealed] {
+  transform: translateX(0);
+}
+
+/* ---- Slide from right ---- */
+
+[data-reveal="right"] {
+  transform: translateX(24px);
+}
+
+[data-reveal="right"][data-revealed] {
+  transform: translateX(0);
+}
+
+/* ---- Scale up ---- */
+
+[data-reveal="scale"] {
+  transform: scale(0.95);
+}
+
+[data-reveal="scale"][data-revealed] {
+  transform: scale(1);
+}
+
+/* ---- SVG path drawing ---- */
+
+@keyframes draw-path {
+  from {
+    stroke-dashoffset: var(--path-length);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.svg-draw {
+  stroke-dasharray: var(--path-length);
+  stroke-dashoffset: var(--path-length);
+}
+
+[data-revealed] .svg-draw {
+  animation: draw-path 800ms ease-in-out forwards;
+}
+
+/* ---- Copy button feedback ---- */
+
+.copy-feedback {
+  transition: color 200ms ease;
+}
+
+.copy-feedback[data-copied="true"] {
+  color: var(--color-blocked);
+}
+
+/* ---- Spring bounce (hero chain click) ---- */
+
+@keyframes spring-in {
+  0% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ---- Amber pulse (hero gap) ---- */
+
+@keyframes amber-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---- Green flash (blocked indicator) ---- */
+
+@keyframes blocked-flash {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- Reduced motion: disable everything ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  [data-stagger] > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .svg-draw {
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+  }
+
+  * {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}

@@ -1,0 +1,33 @@
+(version 1)
+(deny default)
+
+; Minimum necessary for process startup and dynamic linker
+(allow file-read*
+  (literal "/usr/lib")
+  (subpath "/usr/lib/system")
+  (subpath "/System/Library/Frameworks")
+  (subpath "/System/Library/PrivateFrameworks"))
+
+; Network profile: outbound allowed, no filesystem access beyond system libs.
+; Hostname filtering is NOT enforced at this layer — SBPL remote tcp rules
+; reject named hostnames (see Q2 finding). The broker enforces hostnames at
+; Layer 1 (param inspection). Port-level rules here represent the union of
+; ports from the armor manifest's network.allow list.
+;
+; Replace these with the ports derived from the manifest's network.allow list.
+; Example manifest:
+;   "network": { "allow": ["api.github.com:443", "github.com:443"] }
+; Produces:
+;   (allow network-outbound (remote tcp "*:443"))
+(allow network-outbound
+  (remote tcp "*:443")
+  (remote tcp "*:80"))
+
+; Deny loopback — network-only tools must not reach localhost services
+(deny network-outbound
+  (remote tcp "127.0.0.0/8:*")
+  (remote tcp "::1:*"))
+
+; No filesystem r/w beyond system libs (deny default covers this)
+; No subprocess spawning
+(deny process-exec)

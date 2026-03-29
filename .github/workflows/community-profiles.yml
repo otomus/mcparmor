@@ -1,0 +1,238 @@
+name: Community Profiles CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - profiles/community/**
+
+jobs:
+  validate-profiles:
+    name: Validate changed profiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history needed to diff against the base branch
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Get changed profiles
+        id: changed
+        run: |
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- profiles/community/)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch PR body
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=$(gh pr view "${{ github.event.pull_request.number }}" --json body --jq '.body')
+          # Escape newlines so we can safely store in GITHUB_OUTPUT
+          body_escaped="${body//$'\n'/'%0A'}"
+          echo "body=$body_escaped" >> "$GITHUB_OUTPUT"
+
+      - name: Validate each changed profile
+        env:
+          PR_BODY: ${{ steps.pr.outputs.body }}
+        run: |
+          set -euo pipefail
+
+          files="${{ steps.changed.outputs.files }}"
+
+          if [ -z "$files" ]; then
+            echo "No changed profile files detected — skipping validation."
+            exit 0
+          fi
+
+          exit_code=0
+
+          while IFS= read -r file; do
+            # Only process .armor.json files
+            [[ "$file" == *.armor.json ]] || continue
+            [ -f "$file" ] || continue
+
+            echo "--- Validating: $file ---"
+
+            # 1. Validate that the file is valid JSON
+            if ! python3 -m json.tool "$file" > /dev/null 2>&1; then
+              echo "::error file=$file::Invalid JSON in $file"
+              exit_code=1
+              continue
+            fi
+
+            # 2. Validate against the armor schema
+            if ! ajv validate \
+                --spec=draft7 \
+                -s spec/v1.0/armor.schema.json \
+                -d "$file"; then
+              echo "::error file=$file::Schema validation failed for $file"
+              exit_code=1
+              continue
+            fi
+
+            # 3. Warn (do not fail) if network.allow contains *:*
+            if python3 -c "
+          import json, sys
+          data = json.load(open('$file'))
+          allows = data.get('network', {}).get('allow', [])
+          if '*:*' in allows:
+              print('warn')
+          "; then
+              echo "::warning file=$file::network.allow contains '*:*' — consider restricting to specific hosts"
+            fi
+
+            # 4. Warn (do not fail) if filesystem.read contains /
+            if python3 -c "
+          import json, sys
+          data = json.load(open('$file'))
+          reads = data.get('filesystem', {}).get('read', [])
+          if '/' in reads:
+              print('warn')
+          "; then
+              echo "::warning file=$file::filesystem.read contains '/' — consider restricting to specific paths"
+            fi
+
+            # 5. Fail if spawn: true is present without a justification in the PR body
+            spawn_present=$(python3 -c "
+          import json
+          data = json.load(open('$file'))
+          print('true' if data.get('spawn') is True else 'false')
+          ")
+
+            if [ "$spawn_present" = "true" ]; then
+              # A justification must appear in the PR body as a <!-- spawn-justification: ... --> comment
+              # or as a plain "spawn justification:" section (case-insensitive)
+              if ! echo "$PR_BODY" | grep -iqE "(spawn[- ]justification|justif.*spawn)"; then
+                echo "::error file=$file::spawn: true is present in $file but no spawn justification was found in the PR body. Add a 'spawn justification:' section explaining why spawning child processes is required."
+                exit_code=1
+              else
+                echo "spawn justification found in PR body — OK"
+              fi
+            fi
+
+            echo "OK: $file"
+          done <<< "$files"
+
+          exit "$exit_code"
+
+  capability-diff:
+    name: Post capability diff comment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed profiles
+        id: changed
+        run: |
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- profiles/community/)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build capability diff
+        id: diff
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          files="${{ steps.changed.outputs.files }}"
+
+          if [ -z "$files" ]; then
+            echo "comment=No profile files changed." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Python script that produces a Markdown before/after table for each profile
+          diff_output=$(python3 - "$files" <<'PYEOF'
+          import json, subprocess, sys, os
+
+          CAPABILITY_KEYS = [
+              ("network.allow",       lambda d: d.get("network", {}).get("allow", [])),
+              ("network.deny",        lambda d: d.get("network", {}).get("deny", [])),
+              ("filesystem.read",     lambda d: d.get("filesystem", {}).get("read", [])),
+              ("filesystem.write",    lambda d: d.get("filesystem", {}).get("write", [])),
+              ("filesystem.deny",     lambda d: d.get("filesystem", {}).get("deny", [])),
+              ("spawn",               lambda d: d.get("spawn", False)),
+              ("secrets.scan",        lambda d: d.get("secrets", {}).get("scan", False)),
+              ("secrets.block_keys",  lambda d: d.get("secrets", {}).get("block_keys", [])),
+          ]
+
+          base_ref = os.environ.get("BASE_REF", "origin/main")
+          lines = ["## Capability diff\n"]
+
+          for filepath in sys.argv[1].split("\n"):
+              filepath = filepath.strip()
+              if not filepath.endswith(".armor.json") or not os.path.isfile(filepath):
+                  continue
+
+              lines.append(f"### `{filepath}`\n")
+
+              try:
+                  base_raw = subprocess.check_output(
+                      ["git", "show", f"{base_ref}:{filepath}"],
+                      stderr=subprocess.DEVNULL,
+                  )
+                  base_data = json.loads(base_raw)
+              except subprocess.CalledProcessError:
+                  base_data = {}
+
+              with open(filepath) as f:
+                  head_data = json.load(f)
+
+              lines.append("| Capability | Before | After |")
+              lines.append("|---|---|---|")
+
+              for label, extractor in CAPABILITY_KEYS:
+                  before = extractor(base_data)
+                  after = extractor(head_data)
+                  if before == after:
+                      continue
+                  lines.append(f"| `{label}` | `{json.dumps(before)}` | `{json.dumps(after)}` |")
+
+              lines.append("")
+
+          print("\n".join(lines))
+          PYEOF
+          )
+
+          # Store multi-line output safely
+          {
+            echo "comment<<EOF"
+            echo "$diff_output"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          comment="${{ steps.diff.outputs.comment }}"
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body "$comment" \
+            --edit-last \
+            || gh pr comment "${{ github.event.pull_request.number }}" \
+               --body "$comment"

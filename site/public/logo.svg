@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" width="340" height="100">
+  <!-- MCP ARM⬡R wordmark — uses system serif fonts, no external dependencies -->
+  <!-- MCP - smaller on top -->
+  <text x="8" y="30" font-family="Georgia, 'Times New Roman', serif" font-size="24" letter-spacing="5" fill="#FFFFFF">MCP</text>
+  <!-- ARM -->
+  <text x="8" y="82" font-family="Georgia, 'Times New Roman', serif" font-size="56" letter-spacing="2" fill="#FFFFFF">ARM</text>
+  <!-- Hexagon replacing O — positioned after ARM -->
+  <polygon
+    points="224,58 238,50 252,58 252,74 238,82 224,74"
+    fill="none"
+    stroke="#E8714A"
+    stroke-width="2.5"
+    stroke-linejoin="round"
+  />
+  <!-- R after hexagon -->
+  <text x="260" y="82" font-family="Georgia, 'Times New Roman', serif" font-size="56" letter-spacing="2" fill="#FFFFFF">R</text>
+</svg>

@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "profile": "sandboxed",
+  "filesystem": {
+    "read": [],
+    "write": []
+  },
+  "network": {
+    "allow": ["api.trusted.com:443"],
+    "deny_local": true,
+    "deny_metadata": true
+  },
+  "spawn": false,
+  "audit": {
+    "enabled": false
+  }
+}

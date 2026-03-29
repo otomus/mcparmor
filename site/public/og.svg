@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <pattern id="hexPattern" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse">
+      <polygon
+        points="30,2 52,15 52,37 30,50 8,37 8,15"
+        fill="none"
+        stroke="#E8714A"
+        stroke-width="0.5"
+        opacity="0.08"
+      />
+    </pattern>
+  </defs>
+
+  <!-- Dark background -->
+  <rect width="1200" height="630" fill="#0F1117"/>
+
+  <!-- Subtle hex pattern overlay -->
+  <rect width="1200" height="630" fill="url(#hexPattern)"/>
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="1200" height="3" fill="#E8714A" opacity="0.8"/>
+
+  <!-- Decorative hexagons in corners -->
+  <polygon points="80,80 110,63 140,80 140,114 110,131 80,114" fill="none" stroke="#E8714A" stroke-width="1" opacity="0.15"/>
+  <polygon points="1060,500 1090,483 1120,500 1120,534 1090,551 1060,534" fill="none" stroke="#E8714A" stroke-width="1" opacity="0.15"/>
+
+  <!-- MCP - smaller text above -->
+  <text x="600" y="230" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="42" letter-spacing="10" fill="#FFFFFF" opacity="0.7">MCP</text>
+
+  <!-- ARM⬡R - main wordmark as a group, centered at x=600 -->
+  <!-- Total width: ARM(~150) + gap(8) + hex(48) + gap(8) + R(~50) ≈ 264 -->
+  <!-- Start at x = 600 - 132 = 468 -->
+  <text x="468" y="320" font-family="Georgia, 'Times New Roman', serif" font-size="96" letter-spacing="4" fill="#FFFFFF">ARM</text>
+
+  <!-- Hexagon as O -->
+  <polygon
+    points="618,280 642,266 666,280 666,308 642,322 618,308"
+    fill="none"
+    stroke="#E8714A"
+    stroke-width="4"
+    stroke-linejoin="round"
+  />
+
+  <!-- R after hexagon -->
+  <text x="676" y="320" font-family="Georgia, 'Times New Roman', serif" font-size="96" letter-spacing="4" fill="#FFFFFF">R</text>
+
+  <!-- Tagline -->
+  <text x="600" y="395" text-anchor="middle" font-family="-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="24" fill="#9CA3AF">MCP made tools composable.</text>
+  <text x="600" y="430" text-anchor="middle" font-family="-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="24" fill="#9CA3AF">MCP Armor makes them safe.</text>
+
+  <!-- Divider line -->
+  <line x1="540" y1="475" x2="660" y2="475" stroke="#E8714A" stroke-width="1" opacity="0.4"/>
+
+  <!-- Domain -->
+  <text x="600" y="520" text-anchor="middle" font-family="-apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="18" letter-spacing="3" fill="#6B7280">mcp-armor.com</text>
+
+  <!-- Bottom accent line -->
+  <rect x="0" y="627" width="1200" height="3" fill="#E8714A" opacity="0.8"/>
+</svg>

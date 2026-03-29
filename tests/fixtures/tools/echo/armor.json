@@ -1,0 +1,6 @@
+{
+  "$schema": "https://mcp-armor.com/spec/v1.0/armor.schema.json",
+  "version": "1.0",
+  "profile": "strict",
+  "min_spec": "1.0"
+}

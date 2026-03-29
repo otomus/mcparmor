@@ -1,0 +1,36 @@
+(version 1)
+(deny default)
+
+; Minimum necessary for process startup and dynamic linker
+(allow file-read*
+  (literal "/usr/lib")
+  (subpath "/usr/lib/system")
+  (subpath "/System/Library/Frameworks")
+  (subpath "/System/Library/PrivateFrameworks"))
+
+; Sandboxed profile: r/w access to /tmp/mcparmor/* only
+; The tool may read and write its scratch space but cannot touch user home
+; directories or system paths outside the allow list.
+(allow file-read*
+  (subpath "/tmp/mcparmor"))
+(allow file-write*
+  (subpath "/tmp/mcparmor"))
+
+; Network: outbound on declared ports only
+; Hostname filtering is enforced at Layer 1 (param inspection), not here.
+; SBPL cannot filter by hostname — see Q2 finding in findings.md.
+; Replace *:443 with the specific port(s) declared in the armor manifest.
+(allow network-outbound
+  (remote tcp "*:443"))
+
+; Deny loopback — sandboxed tools do not need localhost access
+(deny network-outbound
+  (remote tcp "127.0.0.0/8:*")
+  (remote tcp "::1:*"))
+
+; Deny metadata range — covered by deny default but made explicit for clarity
+; Note: bare (remote ip "169.254.0.0/16") without transport specifier is invalid SBPL.
+; The deny default already covers this range; no additional rule is needed.
+
+; No subprocess spawning allowed
+(deny process-exec)

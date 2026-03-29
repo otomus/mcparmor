@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "profile": "sandboxed",
+  "filesystem": {
+    "read": ["/tmp/**"],
+    "write": []
+  },
+  "network": {
+    "allow": [],
+    "deny_local": true,
+    "deny_metadata": true
+  },
+  "spawn": false,
+  "output": {
+    "scan_secrets": "strict"
+  },
+  "audit": {
+    "enabled": false
+  }
+}

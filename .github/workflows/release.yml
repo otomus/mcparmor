@@ -1,0 +1,301 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-linux-x86_64:
+    name: Build linux/x86_64 (musl)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl toolchain
+        run: sudo apt-get install -y musl-tools
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: linux-x86_64-musl-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+
+      - name: Rename binary with platform suffix
+        run: |
+          cp target/x86_64-unknown-linux-musl/release/mcparmor \
+             target/x86_64-unknown-linux-musl/release/mcparmor-linux-x86_64
+
+      - name: Compute SHA256
+        run: |
+          sha256sum target/x86_64-unknown-linux-musl/release/mcparmor-linux-x86_64 \
+            > target/x86_64-unknown-linux-musl/release/mcparmor-linux-x86_64.sha256
+          cat target/x86_64-unknown-linux-musl/release/mcparmor-linux-x86_64.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcparmor-linux-x86_64
+          path: |
+            target/x86_64-unknown-linux-musl/release/mcparmor-linux-x86_64
+            target/x86_64-unknown-linux-musl/release/mcparmor-linux-x86_64.sha256
+
+  build-linux-aarch64:
+    name: Build linux/aarch64 (musl)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+
+      - name: Install cross-compilation toolchain
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu musl-tools
+          # Tell cargo to use the cross-linker for this target
+          echo '[target.aarch64-unknown-linux-musl]' >> ~/.cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: linux-aarch64-musl-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --locked --target aarch64-unknown-linux-musl
+
+      - name: Rename binary with platform suffix
+        run: |
+          cp target/aarch64-unknown-linux-musl/release/mcparmor \
+             target/aarch64-unknown-linux-musl/release/mcparmor-linux-aarch64
+
+      - name: Compute SHA256
+        run: |
+          sha256sum target/aarch64-unknown-linux-musl/release/mcparmor-linux-aarch64 \
+            > target/aarch64-unknown-linux-musl/release/mcparmor-linux-aarch64.sha256
+          cat target/aarch64-unknown-linux-musl/release/mcparmor-linux-aarch64.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcparmor-linux-aarch64
+          path: |
+            target/aarch64-unknown-linux-musl/release/mcparmor-linux-aarch64
+            target/aarch64-unknown-linux-musl/release/mcparmor-linux-aarch64.sha256
+
+  build-macos-arm64:
+    name: Build macOS/arm64
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: macos-arm64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --locked --target aarch64-apple-darwin
+
+      - name: Rename binary with platform suffix
+        run: |
+          cp target/aarch64-apple-darwin/release/mcparmor \
+             target/aarch64-apple-darwin/release/mcparmor-macos-arm64
+
+      - name: Compute SHA256
+        run: |
+          shasum -a 256 target/aarch64-apple-darwin/release/mcparmor-macos-arm64 \
+            > target/aarch64-apple-darwin/release/mcparmor-macos-arm64.sha256
+          cat target/aarch64-apple-darwin/release/mcparmor-macos-arm64.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcparmor-macos-arm64
+          path: |
+            target/aarch64-apple-darwin/release/mcparmor-macos-arm64
+            target/aarch64-apple-darwin/release/mcparmor-macos-arm64.sha256
+
+  build-macos-x86_64:
+    name: Build macOS/x86_64
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: macos-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --locked --target x86_64-apple-darwin
+
+      - name: Rename binary with platform suffix
+        run: |
+          cp target/x86_64-apple-darwin/release/mcparmor \
+             target/x86_64-apple-darwin/release/mcparmor-macos-x86_64
+
+      - name: Compute SHA256
+        run: |
+          shasum -a 256 target/x86_64-apple-darwin/release/mcparmor-macos-x86_64 \
+            > target/x86_64-apple-darwin/release/mcparmor-macos-x86_64.sha256
+          cat target/x86_64-apple-darwin/release/mcparmor-macos-x86_64.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcparmor-macos-x86_64
+          path: |
+            target/x86_64-apple-darwin/release/mcparmor-macos-x86_64
+            target/x86_64-apple-darwin/release/mcparmor-macos-x86_64.sha256
+
+  build-windows-x86_64:
+    name: Build Windows/x86_64
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: windows-x86_64-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      - name: Compute SHA256
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash target\x86_64-pc-windows-msvc\release\mcparmor.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  mcparmor.exe" | Out-File -FilePath target\x86_64-pc-windows-msvc\release\mcparmor.exe.sha256 -Encoding utf8
+          Get-Content target\x86_64-pc-windows-msvc\release\mcparmor.exe.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcparmor-windows-x86_64
+          path: |
+            target/x86_64-pc-windows-msvc/release/mcparmor.exe
+            target/x86_64-pc-windows-msvc/release/mcparmor.exe.sha256
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - build-linux-x86_64
+      - build-linux-aarch64
+      - build-macos-arm64
+      - build-macos-x86_64
+      - build-windows-x86_64
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Bundle community profiles
+        run: |
+          TAG="${{ github.ref_name }}"
+          tar -czf "profiles-${TAG}.tar.gz" profiles/community/
+          sha256sum "profiles-${TAG}.tar.gz" > "profiles-${TAG}.tar.gz.sha256"
+
+      - name: Assemble checksums.sha256
+        run: |
+          TAG="${{ github.ref_name }}"
+          {
+            cat artifacts/mcparmor-linux-x86_64/mcparmor-linux-x86_64.sha256
+            cat artifacts/mcparmor-linux-aarch64/mcparmor-linux-aarch64.sha256
+            cat artifacts/mcparmor-macos-arm64/mcparmor-macos-arm64.sha256
+            cat artifacts/mcparmor-macos-x86_64/mcparmor-macos-x86_64.sha256
+            cat artifacts/mcparmor-windows-x86_64/mcparmor.exe.sha256
+            cat "profiles-${TAG}.tar.gz.sha256"
+          } > checksums.sha256
+          echo "--- checksums.sha256 ---"
+          cat checksums.sha256
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          gh release create "$TAG" \
+            --title "mcparmor $TAG" \
+            --generate-notes \
+            artifacts/mcparmor-linux-x86_64/mcparmor-linux-x86_64 \
+            artifacts/mcparmor-linux-aarch64/mcparmor-linux-aarch64 \
+            artifacts/mcparmor-macos-arm64/mcparmor-macos-arm64 \
+            artifacts/mcparmor-macos-x86_64/mcparmor-macos-x86_64 \
+            "artifacts/mcparmor-windows-x86_64/mcparmor.exe" \
+            "profiles-${TAG}.tar.gz" \
+            checksums.sha256

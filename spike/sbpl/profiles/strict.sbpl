@@ -1,0 +1,36 @@
+(version 1)
+(deny default)
+
+; Minimum necessary for process startup and dynamic linker
+; Even statically-linked Go binaries on macOS need the dynamic linker
+; to resolve system calls via libSystem. Without these, the process
+; cannot load at all.
+(allow file-read*
+  (literal "/usr/lib")
+  (literal "/usr/lib/libSystem.B.dylib")
+  (subpath "/usr/lib/system")
+  (subpath "/System/Library/Frameworks")
+  (subpath "/System/Library/PrivateFrameworks"))
+
+; Required for mach port lookups used by the dynamic linker and system startup
+(allow mach-lookup)
+(allow mach-register)
+
+; Allow signals to self (required for normal process operation)
+(allow signal (target self))
+
+; Allow process info queries on self (used by some runtimes at startup)
+(allow process-info-pidinfo)
+
+; Allow sysctl reads (used by the Go runtime and others for CPU count, etc.)
+(allow sysctl-read)
+
+; Allow file metadata reads broadly (stat, lstat) — required by the dynamic
+; linker to locate shared libraries. Without this, dlopen fails before main().
+(allow file-read-metadata)
+
+; Strict profile: no network outbound, no user filesystem, no subprocess spawn
+(deny network-outbound)
+(deny process-exec)
+(deny file-read-data (subpath "/Users"))
+(deny file-write-data)

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://mcp-armor.com/spec/v1.0/armor.schema.json",
+  "version": "1.0",
+  "min_spec": "1.0",
+  "profile": "browser",
+  "locked": false,
+  "timeout_ms": 60000,
+  "network": {
+    "allow": [
+      "*:443",
+      "*:80"
+    ],
+    "deny_local": false,
+    "deny_metadata": true
+  },
+  "filesystem": {
+    "read": ["/Users/*/.config/playwright/*"]
+  },
+  "spawn": true,
+  "output": {
+    "scan_secrets": true,
+    "max_size_kb": 8192
+  },
+  "audit": {
+    "enabled": true,
+    "redact_params": false
+  },
+  "_source": "team-authored",
+  "_reviewed_by": "mcparmor-core-team",
+  "_reviewed_at": "2026-03-27T00:00:00Z"
+}

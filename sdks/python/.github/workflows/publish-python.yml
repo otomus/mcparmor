@@ -1,0 +1,41 @@
+name: Publish Python SDK
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-wheels:
+    name: Build wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23
+        with:
+          package-dir: sdks/python
+          output-dir: wheelhouse
+        env:
+          CIBW_BEFORE_BUILD: cargo build --release --manifest-path ../../Cargo.toml && mkdir -p src/mcparmor/bin && cp ../../target/release/mcparmor src/mcparmor/bin/
+
+  publish:
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cibw-wheels-*
+          merge-multiple: true
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

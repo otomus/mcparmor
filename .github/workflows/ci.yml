@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust-test:
+    name: Rust tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-22.04
+          - ubuntu-20.04
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache cargo target directory
+        uses: actions/cache@v4
+        with:
+          path: target/
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
+      - name: Run tests
+        run: cargo test --workspace
+
+      - name: Run clippy
+        run: cargo clippy --workspace -- -D warnings
+
+  python-sdk-test:
+    name: Python SDK tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run Python SDK tests
+        working-directory: sdks/python
+        run: uv run pytest
+
+  node-sdk-test:
+    name: Node SDK tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: sdks/node
+        run: npm ci
+
+      - name: Run Node SDK tests
+        working-directory: sdks/node
+        run: npm test
+
+  node-typecheck:
+    name: Node SDK typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: sdks/node
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: sdks/node
+        run: npm run typecheck
+
+  schema-validate:
+    name: Validate armor.schema.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate schema against JSON Schema draft-07 meta-schema
+        # ajv-cli validates that the schema itself is a valid JSON Schema document.
+        # We use the draft-07 meta-schema because armor.schema.json targets that dialect.
+        run: |
+          ajv compile \
+            --spec=draft7 \
+            spec/v1.0/armor.schema.json
+
+  community-profile-validate:
+    name: Validate community profiles (all)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate all community profiles against armor schema
+        run: |
+          set -euo pipefail
+          exit_code=0
+          for file in profiles/community/*.armor.json; do
+            echo "--- Validating: $file ---"
+            if ! ajv validate \
+                --spec=draft7 \
+                -s spec/v1.0/armor.schema.json \
+                -d "$file"; then
+              echo "::error file=$file::Schema validation failed for $file"
+              exit_code=1
+            else
+              echo "OK: $file"
+            fi
+          done
+          exit "$exit_code"
