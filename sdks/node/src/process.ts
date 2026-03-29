@@ -25,6 +25,11 @@ export interface ArmoredProcessOptions {
   readonly noOsSandbox?: boolean;
   /** Working directory for the spawned process. */
   readonly cwd?: string;
+  /**
+   * If true, {@link ArmoredProcess.spawn} waits for a `{"ready": true}`
+   * JSON line from stdout before resolving.
+   */
+  readonly readySignal?: boolean;
 }
 
 /** Options accepted by {@link ArmoredProcess.invoke}. */
@@ -50,6 +55,7 @@ export class ArmoredProcessError extends Error {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_READY_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -233,6 +239,7 @@ function createTimeoutController(timeoutMs: number): AbortController {
 export class ArmoredProcess {
   readonly #options: ArmoredProcessOptions;
   #process: ChildProcess | null = null;
+  #exitCode: number | null = null;
 
   /**
    * Create a new ArmoredProcess.
@@ -250,6 +257,8 @@ export class ArmoredProcess {
    * Factory that eagerly spawns the subprocess before the first invoke.
    *
    * Use this when you want to amortize startup latency across multiple invocations.
+   * If {@link ArmoredProcessOptions.readySignal} is true, waits for
+   * `{"ready": true}` on stdout before resolving.
    *
    * @param options - Configuration for the armored process.
    * @returns A promise that resolves to a running {@link ArmoredProcess}.
@@ -258,8 +267,123 @@ export class ArmoredProcess {
   static async spawn(options: ArmoredProcessOptions): Promise<ArmoredProcess> {
     const instance = new ArmoredProcess(options);
     instance.#startProcess();
+    if (options.readySignal === true) {
+      await instance.waitReady();
+    }
     return instance;
   }
+
+  // ------------------------------------------------------------------
+  // Lifecycle properties and methods
+  // ------------------------------------------------------------------
+
+  /**
+   * The PID of the underlying subprocess, or null if not running.
+   *
+   * Useful for logging and debugging.
+   */
+  get pid(): number | null {
+    return this.#process?.pid ?? null;
+  }
+
+  /**
+   * Check whether the subprocess has terminated.
+   *
+   * @returns The exit code if the process has exited, or null if still running
+   *   or not yet started.
+   */
+  poll(): number | null {
+    if (this.#process === null) {
+      return this.#exitCode;
+    }
+    return this.#exitCode;
+  }
+
+  /**
+   * Return true if the subprocess is currently running.
+   *
+   * @returns True if the process exists and has not exited, false otherwise.
+   */
+  isAlive(): boolean {
+    return this.#process !== null && this.poll() === null;
+  }
+
+  /**
+   * Wait for the tool to send a `{"ready": true}` JSON line on stdout.
+   *
+   * Reads from stdout until a JSON object with `"ready": true` is found.
+   * Non-ready lines are silently discarded.
+   *
+   * @param timeoutMs - Maximum milliseconds to wait. Default: 30 000.
+   * @returns A promise that resolves when the ready signal is received.
+   * @throws {ArmoredProcessError} If the process is not running, stdout is
+   *   unavailable, the process exits before signalling, or the timeout expires.
+   */
+  waitReady(timeoutMs: number = DEFAULT_READY_TIMEOUT_MS): Promise<void> {
+    const proc = this.#process;
+    if (proc === null || proc.stdout === null) {
+      return Promise.reject(
+        new ArmoredProcessError('Process is not running; cannot wait for ready signal'),
+      );
+    }
+
+    const controller = createTimeoutController(timeoutMs);
+
+    return new Promise<void>((resolve, reject) => {
+      let buffer = '';
+
+      const onData = (chunk: Buffer | string): void => {
+        buffer += chunk.toString();
+        const newlineIndex = buffer.indexOf('\n');
+        if (newlineIndex === -1) {
+          return;
+        }
+
+        const line = buffer.slice(0, newlineIndex);
+        buffer = buffer.slice(newlineIndex + 1);
+        cleanup();
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          reject(new ArmoredProcessError(`Expected ready signal, got invalid JSON: ${line}`));
+          return;
+        }
+
+        if (typeof parsed === 'object' && parsed !== null && (parsed as Record<string, unknown>)['ready'] === true) {
+          resolve();
+        } else {
+          reject(new ArmoredProcessError(`Expected ready signal, got: ${line}`));
+        }
+      };
+
+      const onClose = (): void => {
+        cleanup();
+        reject(new ArmoredProcessError('Process exited before sending ready signal'));
+      };
+
+      const onAbort = (): void => {
+        cleanup();
+        reject(new ArmoredProcessError('Timed out waiting for ready signal'));
+      };
+
+      const cleanup = (): void => {
+        proc.stdout?.removeListener('data', onData);
+        proc.stdout?.removeListener('close', onClose);
+        controller.signal.removeEventListener('abort', onAbort);
+        controller.abort();
+      };
+
+      proc.stdout!.on('data', onData);
+      proc.stdout!.once('close', onClose);
+      controller.signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Core API
+  // ------------------------------------------------------------------
 
   /**
    * Start the underlying subprocess if it is not already running.
@@ -271,7 +395,11 @@ export class ArmoredProcess {
       return;
     }
     try {
-      this.#process = armorSpawn(this.#options.command, toSpawnOptions(this.#options));
+      const proc = armorSpawn(this.#options.command, toSpawnOptions(this.#options));
+      proc.on('exit', (code: number | null) => {
+        this.#exitCode = code;
+      });
+      this.#process = proc;
     } catch (err) {
       throw new ArmoredProcessError('Failed to spawn armored process', { cause: err });
     }

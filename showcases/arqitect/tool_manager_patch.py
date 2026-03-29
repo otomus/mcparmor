@@ -18,6 +18,7 @@ compatible with tools that predate the armor field).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -26,8 +27,8 @@ from pathlib import Path
 from subprocess import PIPE
 from typing import Optional
 
-# After: import armor_popen from mcparmor
-from mcparmor import armor_popen
+# After: import armor_popen and ArmoredPool from mcparmor
+from mcparmor import ArmoredPool, armor_popen
 
 logger = logging.getLogger(__name__)
 
@@ -216,3 +217,84 @@ class ToolManager:
             stdout=PIPE,
             stderr=PIPE,
         )
+
+
+class PooledToolManager:
+    """
+    Manages Arqitect tool subprocesses using an :class:`ArmoredPool`.
+
+    Instead of spawning one process per tool at a time, this manager
+    pre-warms a pool of processes for a single tool definition and hands
+    them out on demand. Designed for workloads that maintain many concurrent
+    tool instances (e.g. 50 warm processes).
+
+    Usage::
+
+        async with PooledToolManager(tool, pool_size=50) as manager:
+            proc = await manager.acquire()
+            try:
+                result = proc.invoke({"method": "run", "params": {}})
+            finally:
+                await manager.release(proc)
+    """
+
+    def __init__(
+        self,
+        tool: ToolDescriptor,
+        *,
+        pool_size: int = 10,
+        ready_signal: bool = False,
+    ) -> None:
+        """
+        Initialise the pooled tool manager.
+
+        Args:
+            tool: Tool descriptor defining command and armor path.
+            pool_size: Number of processes to pre-spawn.
+            ready_signal: If True, each process waits for a ready signal.
+        """
+        self._tool = tool
+        self._pool = ArmoredPool(
+            command=tool.command,
+            armor=tool.armor_path,
+            size=pool_size,
+            ready_signal=ready_signal,
+        )
+
+    async def __aenter__(self) -> "PooledToolManager":
+        """Start the process pool."""
+        await self._pool.start()
+        logger.info(
+            "PooledToolManager started for '%s' with %d processes",
+            self._tool.name,
+            self._pool.size,
+        )
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: type[BaseException] | None,
+    ) -> None:
+        """Close the process pool."""
+        await self._pool.close()
+        logger.info("PooledToolManager closed for '%s'", self._tool.name)
+
+    async def acquire(self) -> "ArmoredPool":
+        """
+        Acquire a process from the pool.
+
+        Returns:
+            A running ArmoredProcess ready for invoke().
+        """
+        return await self._pool.acquire()
+
+    async def release(self, proc: object) -> None:
+        """
+        Return a process to the pool.
+
+        Args:
+            proc: The process previously obtained via acquire().
+        """
+        await self._pool.release(proc)  # type: ignore[arg-type]

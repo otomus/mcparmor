@@ -131,9 +131,10 @@ class SkillRunner extends EventEmitter {
    * @returns {Promise<import('child_process').ChildProcess>}
    */
   async _spawnSkill(skill) {
-    // After (one-line change):
+    // After (one-line change + readySignal):
     const proc = await armorSpawn(skill.command, skill.args, {
       armor: skill.armorPath,
+      readySignal: true,
       stdio: 'pipe',
       env: { ...process.env, ...skill.env },
     });

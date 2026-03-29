@@ -304,3 +304,169 @@ def test_cwd_forwarded_to_popen() -> None:
 
     _, kwargs = mock_popen.call_args
     assert kwargs["cwd"] == "/some/dir"
+
+
+# ---------------------------------------------------------------------------
+# pid property
+# ---------------------------------------------------------------------------
+
+
+def test_pid_returns_none_before_spawn() -> None:
+    """pid is None before the subprocess has been started."""
+    ap = ArmoredProcess(command=["tool"])
+    assert ap.pid is None
+
+
+def test_pid_returns_process_pid_after_spawn() -> None:
+    """pid returns the underlying Popen.pid after spawning."""
+    proc = _make_proc()
+    proc.pid = 42
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            assert ap.pid == 42
+
+
+# ---------------------------------------------------------------------------
+# poll()
+# ---------------------------------------------------------------------------
+
+
+def test_poll_returns_none_before_spawn() -> None:
+    """poll() returns None when no subprocess exists."""
+    ap = ArmoredProcess(command=["tool"])
+    assert ap.poll() is None
+
+
+def test_poll_returns_none_when_running() -> None:
+    """poll() returns None for a still-running subprocess."""
+    proc = _make_proc()
+    proc.poll.return_value = None
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            assert ap.poll() is None
+
+
+def test_poll_returns_exit_code_when_terminated() -> None:
+    """poll() returns the exit code after the subprocess exits."""
+    proc = _make_proc()
+    proc.poll.return_value = 1
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            assert ap.poll() == 1
+
+
+# ---------------------------------------------------------------------------
+# is_alive()
+# ---------------------------------------------------------------------------
+
+
+def test_is_alive_false_before_spawn() -> None:
+    """is_alive() returns False when no subprocess has been started."""
+    ap = ArmoredProcess(command=["tool"])
+    assert ap.is_alive() is False
+
+
+def test_is_alive_true_when_running() -> None:
+    """is_alive() returns True for a running subprocess."""
+    proc = _make_proc()
+    proc.poll.return_value = None
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            assert ap.is_alive() is True
+
+
+def test_is_alive_false_when_terminated() -> None:
+    """is_alive() returns False after the subprocess exits."""
+    proc = _make_proc()
+    proc.poll.return_value = 0
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            assert ap.is_alive() is False
+
+
+# ---------------------------------------------------------------------------
+# wait_ready()
+# ---------------------------------------------------------------------------
+
+
+def test_wait_ready_succeeds_with_ready_signal() -> None:
+    """wait_ready() returns when stdout emits {"ready": true}."""
+    proc = _make_proc(stdout_lines=[(json.dumps({"ready": True}) + "\n").encode()])
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            ap.wait_ready()  # should not raise
+
+
+def test_wait_ready_raises_on_timeout() -> None:
+    """wait_ready() raises TimeoutError when select reports no data."""
+    proc = _make_proc()
+
+    with _patch_popen(proc), _patch_select(ready=False):
+        with ArmoredProcess(command=["tool"]) as ap:
+            with pytest.raises(TimeoutError):
+                ap.wait_ready(timeout=0.01)
+
+
+def test_wait_ready_raises_on_empty_stdout() -> None:
+    """wait_ready() raises ArmoredProcessError if stdout closes."""
+    proc = _make_proc(stdout_lines=[b""])
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            with pytest.raises(ArmoredProcessError, match="closed stdout"):
+                ap.wait_ready()
+
+
+def test_wait_ready_raises_on_non_ready_message() -> None:
+    """wait_ready() raises when the JSON line is not a ready signal."""
+    proc = _make_proc(stdout_lines=[(json.dumps({"status": "ok"}) + "\n").encode()])
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            with pytest.raises(ArmoredProcessError, match="Expected ready signal"):
+                ap.wait_ready()
+
+
+def test_wait_ready_raises_when_not_running() -> None:
+    """wait_ready() raises ArmoredProcessError if process is not running."""
+    ap = ArmoredProcess(command=["tool"])
+    with pytest.raises(ArmoredProcessError, match="not running"):
+        ap.wait_ready()
+
+
+def test_ready_signal_auto_waited_in_context_manager() -> None:
+    """ready_signal=True makes the context manager wait for ready automatically."""
+    ready_line = (json.dumps({"ready": True}) + "\n").encode()
+    response_line = (json.dumps(_FAKE_RESPONSE) + "\n").encode()
+    proc = _make_proc(stdout_lines=[ready_line, response_line])
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"], ready_signal=True) as ap:
+            result = ap.invoke({"method": "run"})
+    assert result == _FAKE_RESPONSE
+
+
+def test_wait_ready_raises_on_invalid_json() -> None:
+    """wait_ready() raises when stdout emits invalid JSON."""
+    proc = _make_proc(stdout_lines=[b"not-json\n"])
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            with pytest.raises(json.JSONDecodeError):
+                ap.wait_ready()
+
+
+def test_wait_ready_raises_on_ready_false() -> None:
+    """wait_ready() raises when ready is explicitly false."""
+    proc = _make_proc(stdout_lines=[(json.dumps({"ready": False}) + "\n").encode()])
+
+    with _patch_popen(proc), _patch_select():
+        with ArmoredProcess(command=["tool"]) as ap:
+            with pytest.raises(ArmoredProcessError, match="Expected ready signal"):
+                ap.wait_ready()

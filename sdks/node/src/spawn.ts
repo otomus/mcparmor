@@ -66,6 +66,11 @@ function extractSpawnOptions(options: ArmorSpawnOptions): SpawnOptions {
  * declared capability manifest at the protocol level (Layer 1) and the
  * OS level (Layer 2) where available.
  *
+ * **Encoding / text mode** — to control how stdio data is decoded, pass
+ * standard Node.js `SpawnOptions` fields such as `encoding` via the
+ * options object. The armor-specific fields (`armor`, `profile`,
+ * `noOsSandbox`) are stripped before forwarding to `child_process.spawn`.
+ *
  * @param command - The tool command and arguments to run under armor.
  *   First element is the executable; remaining elements are its arguments.
  * @param options - Armor options and standard spawn options.

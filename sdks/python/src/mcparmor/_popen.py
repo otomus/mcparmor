@@ -26,6 +26,21 @@ def armor_popen(
     declared capability manifest at both the protocol level (Layer 1) and
     the OS level (Layer 2) where available.
 
+    **Text mode** — to get decoded strings instead of raw bytes on
+    stdin/stdout, pass ``text=True`` and an ``encoding`` to
+    ``popen_kwargs``. These are forwarded directly to
+    :class:`subprocess.Popen`::
+
+        proc = armor_popen(
+            ["python", "tool.py"],
+            armor="./armor.json",
+            text=True,
+            encoding="utf-8",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+        )
+        # proc.stdout.readline() now returns str, not bytes.
+
     Args:
         command: The tool command and arguments to run under armor.
         armor: Path to the armor.json manifest. If None, the broker
@@ -35,7 +50,8 @@ def armor_popen(
         no_os_sandbox: Disable OS-level sandbox (Layer 2). Protocol-level
             enforcement (Layer 1) remains active.
         **popen_kwargs: Additional keyword arguments forwarded to
-            subprocess.Popen (e.g. env, cwd, stdin, stdout).
+            subprocess.Popen (e.g. env, cwd, stdin, stdout, text,
+            encoding).
 
     Returns:
         A subprocess.Popen object for the armored tool process.

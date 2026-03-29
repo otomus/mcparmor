@@ -15,6 +15,9 @@ from mcparmor._popen import ArmorPopenError, armor_popen
 # Sentinel used to detect reads that returned no data.
 _EMPTY_LINE = ""
 
+# Default timeout for the ready-signal handshake (seconds).
+_DEFAULT_READY_TIMEOUT = 30.0
+
 
 class ArmoredProcessError(OSError):
     """Raised when an armored process cannot be started or communication fails."""
@@ -50,6 +53,7 @@ class ArmoredProcess:
         profile: str | None = None,
         no_os_sandbox: bool = False,
         cwd: str | Path | None = None,
+        ready_signal: bool = False,
     ) -> None:
         """
         Initialise the ArmoredProcess configuration.
@@ -64,12 +68,15 @@ class ArmoredProcess:
             profile: Profile name override. Ignored if the manifest is locked.
             no_os_sandbox: Disable OS-level sandbox enforcement.
             cwd: Working directory for the spawned process.
+            ready_signal: If True, the context manager waits for a
+                ``{"ready": true}`` JSON line from stdout before returning.
         """
         self._command = command
         self._armor = armor
         self._profile = profile
         self._no_os_sandbox = no_os_sandbox
         self._cwd = cwd
+        self._ready_signal = ready_signal
         self._process: subprocess.Popen | None = None
         self._persistent = False
 
@@ -81,6 +88,8 @@ class ArmoredProcess:
         """Spawn the armored process and mark it as persistent."""
         self._persistent = True
         self._spawn()
+        if self._ready_signal:
+            self.wait_ready()
         return self
 
     def __exit__(
@@ -95,6 +104,76 @@ class ArmoredProcess:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    @property
+    def pid(self) -> int | None:
+        """
+        Return the PID of the underlying subprocess, or None if not running.
+
+        Useful for logging and debugging.
+
+        Returns:
+            The process ID, or None if no subprocess is active.
+        """
+        if self._process is None:
+            return None
+        return self._process.pid
+
+    def poll(self) -> int | None:
+        """
+        Check whether the subprocess has terminated.
+
+        Returns:
+            The exit code if the process has exited, or None if still running.
+            Returns None if no subprocess has been started.
+        """
+        if self._process is None:
+            return None
+        return self._process.poll()
+
+    def is_alive(self) -> bool:
+        """
+        Return True if the subprocess is currently running.
+
+        Returns:
+            True if the process exists and has not exited, False otherwise.
+        """
+        return self._process is not None and self.poll() is None
+
+    def wait_ready(self, timeout: float = _DEFAULT_READY_TIMEOUT) -> None:
+        """
+        Wait for the tool to send a ``{"ready": true}`` signal on stdout.
+
+        Reads JSON lines from stdout until a line containing ``"ready": true``
+        is found. Non-ready lines are silently discarded.
+
+        Args:
+            timeout: Maximum seconds to wait for the ready signal.
+
+        Raises:
+            ArmoredProcessError: If the process is not running or stdout is
+                unavailable.
+            TimeoutError: If the ready signal is not received within *timeout*.
+        """
+        proc = self._process
+        if proc is None or proc.stdout is None:
+            raise ArmoredProcessError("Process is not running; cannot wait for ready signal.")
+
+        ready, _, _ = select.select([proc.stdout], [], [], timeout)
+        if not ready:
+            raise TimeoutError("Timed out waiting for ready signal from armored process.")
+
+        raw = proc.stdout.readline()
+        text = raw.decode().strip() if isinstance(raw, bytes) else raw.strip()
+
+        if text == _EMPTY_LINE:
+            raise ArmoredProcessError("Process closed stdout before sending ready signal.")
+
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict) or not parsed.get("ready"):
+            raise ArmoredProcessError(
+                f"Expected ready signal, got: {text}"
+            )
 
     def invoke(self, message: dict, *, timeout: float | None = None) -> dict:
         """
