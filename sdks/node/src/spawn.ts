@@ -4,6 +4,7 @@
 
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { findBinary } from './binary.ts';
+import { getLogger } from './logger.ts';
 
 /** Error message used when the command argument is invalid. */
 const ERR_INVALID_COMMAND = 'command must be a non-empty array of strings';
@@ -103,5 +104,11 @@ export function armorSpawn(
 
   const spawnOptions = extractSpawnOptions(options);
 
-  return spawn(binaryPath, brokerArgs, spawnOptions);
+  const child = spawn(binaryPath, brokerArgs, spawnOptions);
+
+  getLogger().info(
+    `MCP Armor on duty (pid=${String(child.pid)}, command=${command[0]}, armor=${armor ?? 'auto'})`,
+  );
+
+  return child;
 }

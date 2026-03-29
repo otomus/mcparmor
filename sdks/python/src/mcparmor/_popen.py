@@ -1,10 +1,13 @@
 """armor_popen — subprocess.Popen wrapper with MCP Armor enforcement."""
 
+import logging
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from mcparmor._binary import BinaryNotFoundError, find_binary
+
+logger = logging.getLogger(__name__)
 
 
 class ArmorPopenError(OSError):
@@ -78,11 +81,19 @@ def armor_popen(
     broker_command = [str(binary), "run", *broker_args, "--", *command]
 
     try:
-        return subprocess.Popen(broker_command, **popen_kwargs)
+        proc = subprocess.Popen(broker_command, **popen_kwargs)
     except (OSError, FileNotFoundError) as exc:
         raise ArmorPopenError(
             f"Failed to start mcparmor broker: {exc}"
         ) from exc
+
+    logger.info(
+        "MCP Armor on duty (pid=%d, command=%s, armor=%s)",
+        proc.pid,
+        command[0],
+        armor,
+    )
+    return proc
 
 
 def _build_broker_args(

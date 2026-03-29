@@ -1,6 +1,6 @@
 {
   "name": "mcparmor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP Armor — capability enforcement for MCP tools",
   "type": "module",
   "main": "dist/index.js",

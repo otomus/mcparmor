@@ -18,3 +18,4 @@ export { BinaryNotFoundError, BinaryChecksumError } from './binary.ts';
 export { ArmorManifest, ManifestLoadError } from './manifest.ts';
 export { ArmoredProcess, ArmoredProcessError, type ArmoredProcessOptions } from './process.ts';
 export { ArmoredPool, ArmoredPoolError, type ArmoredPoolOptions } from './pool.ts';
+export { setLogger, getLogger, type Logger } from './logger.ts';
