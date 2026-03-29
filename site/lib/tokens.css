@@ -11,6 +11,7 @@
   --color-bg: #ffffff;
   --color-bg-subtle: #f9f8f6;
   --color-bg-muted: #f2f0ec;
+  --color-bg-inset: #e8e5e0;
   --color-border: #e8e5e0;
   --color-border-strong: #d0ccc6;
   --color-text-primary: #1a1917;
@@ -23,6 +24,7 @@
   --color-blocked-bg: #f0fdf4;
   --color-allowed: #b45309;
   --color-allowed-bg: #fffbeb;
+  --color-error: #ef4444;
 
   /* ---- Typography ---- */
   --text-display: clamp(2.5rem, 5vw, 4rem);

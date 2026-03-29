@@ -6,6 +6,7 @@ import { AdversarialMatrix } from "@/components/sections/AdversarialMatrix";
 import { PlatformCards } from "@/components/sections/PlatformCards";
 import { HostSupport } from "@/components/sections/HostSupport";
 import { ArqitectCallout } from "@/components/sections/ArqitectCallout";
+import { RuntimeIndication } from "@/components/sections/RuntimeIndication";
 import { ForAuthorsBuilders } from "@/components/sections/ForAuthorsBuilders";
 import { InstallSection } from "@/components/sections/InstallSection";
 import { TestEvidence } from "@/components/sections/TestEvidence";
@@ -28,6 +29,7 @@ export default function HomePage() {
       <TestEvidence />
       <PlatformCards />
       <HostSupport />
+      <RuntimeIndication />
       <ArqitectCallout />
       <ForAuthorsBuilders />
       <InstallSection />

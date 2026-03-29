@@ -22,6 +22,7 @@ const COMMANDS: CommandSpec[] = [
       { flag: "--no-log-params", description: "Omit param values from audit entries." },
       { flag: "--audit-log <file>", description: "Write audit entries to a custom file." },
       { flag: "--no-audit", description: "Disable all audit logging." },
+      { flag: "--no-annotate", description: "Disable shield indicator in tool descriptions (tools/list responses)." },
     ],
   },
   {

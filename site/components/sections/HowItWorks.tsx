@@ -99,6 +99,10 @@ function BrokerDiagram(): ReactNode {
 │  · Seatbelt (macOS)     │
 │  · Landlock (Linux)     │
 │  · Seccomp (spawn)      │
+│                         │
+│  Runtime Indication     │
+│  · 🛡 tool annotation   │
+│  · stderr block alerts  │
 └─────────────────────────┘
          │
          │ stdio (restricted)
