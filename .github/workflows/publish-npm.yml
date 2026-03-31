@@ -5,48 +5,11 @@ on:
     types: [published]
 
 jobs:
-  build-binaries:
-    name: Build binary (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            pkg: mcparmor-linux-x64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            pkg: mcparmor-linux-arm64
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            pkg: mcparmor-darwin-x64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            pkg: mcparmor-darwin-arm64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            pkg: mcparmor-win32-x64
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: binary-${{ matrix.pkg }}
-          path: target/${{ matrix.target }}/release/mcparmor${{ matrix.os == 'windows-latest' && '.exe' || '' }}
-
   publish:
-    needs: build-binaries
     runs-on: ubuntu-latest
     environment: npm
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -55,14 +18,27 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      - name: Download pre-built binaries from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          mkdir -p sdks/node/bin
+
+          for asset in mcparmor-linux-x86_64 mcparmor-linux-aarch64 mcparmor-macos-arm64 mcparmor-macos-x86_64; do
+            gh release download "$TAG" --pattern "$asset" --dir sdks/node/bin
+          done
+
+          gh release download "$TAG" --pattern "mcparmor.exe" --dir sdks/node/bin
+
+          chmod +x sdks/node/bin/mcparmor-*
+
       - name: Build SDK
         working-directory: sdks/node
         run: npm ci && npm run build
 
-      - name: Publish platform packages and main package
-        run: |
-          # Each platform package is a minimal package.json + binary
-          # Published as scoped packages: mcparmor-linux-x64, etc.
-          echo "Publishing platform packages..."
+      - name: Publish to npm
+        working-directory: sdks/node
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
