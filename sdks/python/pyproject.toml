@@ -15,13 +15,6 @@ Repository = "https://github.com/otomus/mcparmor"
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcparmor"]
 
-[tool.cibuildwheel]
-build = "cp312-* cp313-*"
-skip = ["*-win32", "*-manylinux_i686"]
-
-[tool.cibuildwheel.linux]
-repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
