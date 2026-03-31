@@ -20,13 +20,7 @@ build = "cp312-* cp313-*"
 skip = ["*-win32", "*-manylinux_i686"]
 
 [tool.cibuildwheel.linux]
-archs = ["x86_64", "aarch64"]
-before-build = "cargo build --release --manifest-path ../../Cargo.toml"
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
-
-[tool.cibuildwheel.macos]
-archs = ["x86_64", "arm64"]
-before-build = "cargo build --release --manifest-path ../../Cargo.toml"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
