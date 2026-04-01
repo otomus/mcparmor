@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcparmor"
+name = "mcp-armor"
 version = "0.3.0"
 description = "MCP Armor — capability enforcement for MCP tools"
 requires-python = ">=3.12"
