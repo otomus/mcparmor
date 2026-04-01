@@ -97,7 +97,7 @@ jobs:
       - name: Install mcparmor
         run: curl -sSfL https://install.mcp-armor.com | sh
       - name: Install deps
-        run: pip install mcparmor pytest pytest-asyncio
+        run: pip install otomus-mcp-armor pytest pytest-asyncio
       - name: Run policy tests
         run: pytest tests/test_armor_policies.py -v`;
 
@@ -133,7 +133,7 @@ export default function TestKitPage(): ReactNode {
         <div className="flex flex-col gap-3">
           <div>
             <p className="font-medium mb-1">Python</p>
-            <CodeBlock code="pip install mcparmor" lang="bash" />
+            <CodeBlock code="pip install otomus-mcp-armor" lang="bash" />
           </div>
           <div>
             <p className="font-medium mb-1">Node.js</p>

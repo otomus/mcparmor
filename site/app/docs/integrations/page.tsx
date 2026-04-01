@@ -57,7 +57,7 @@ export default function IntegrationsPage(): ReactNode {
           Drop-in replacement for <code>subprocess.Popen</code> that applies armor
           enforcement before the process starts.
         </p>
-        <CodeBlock code="pip install mcparmor" lang="bash" />
+        <CodeBlock code="pip install otomus-mcp-armor" lang="bash" />
         <div className="mt-4">
           <CodeBlock code={PYTHON_SDK} lang="python" filename="example.py" />
         </div>

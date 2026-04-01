@@ -38,7 +38,7 @@ export default function InstallationPage(): ReactNode {
       </Section>
 
       <Section title="pip (cross-platform)">
-        <CodeBlock code="pip install mcparmor" lang="bash" />
+        <CodeBlock code="pip install otomus-mcp-armor" lang="bash" />
         <p className="mt-3 text-sm" style={{ color: "var(--color-text-secondary)" }}>
           Recommended for Python users. Binary verified with SHA-256 checksum at install.
         </p>

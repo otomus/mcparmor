@@ -167,7 +167,7 @@ package provides `armorSpawn` — a drop-in replacement for `child_process.spawn
 Install from PyPI:
 
 ```bash
-pip install mcparmor
+pip install otomus-mcp-armor
 ```
 
 ### Basic usage

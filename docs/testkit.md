@@ -40,7 +40,7 @@ active and is what the TestKit is designed to test.
 
 **Python:**
 ```bash
-pip install mcparmor
+pip install otomus-mcp-armor
 ```
 
 **Node.js:**
@@ -467,7 +467,7 @@ jobs:
         run: curl -sSfL https://install.mcp-armor.com | sh
 
       - name: Install Python deps
-        run: pip install mcparmor pytest pytest-asyncio
+        run: pip install otomus-mcp-armor pytest pytest-asyncio
 
       - name: Run policy tests
         run: pytest tests/test_armor_policies.py -v

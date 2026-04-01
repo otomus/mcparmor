@@ -35,7 +35,7 @@ const INSTALL_TABS = [
     id: "pip",
     label: "pip",
     content: (
-      <CodeBlock code="pip install mcparmor" lang="bash" />
+      <CodeBlock code="pip install otomus-mcp-armor" lang="bash" />
     ),
   },
 ];
