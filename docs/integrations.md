@@ -479,6 +479,16 @@ platform-specific bundled binary.
 3. If using a virtual environment, ensure the environment's `PATH` includes the
    system binary location.
 
+### Testing your manifest with the TestKit
+
+Use the MCP Armor TestKit to verify your `armor.json` policies in CI or during
+development. The TestKit runs the real broker with a mock tool behind it — no
+production tools required.
+
+See [testkit.md](testkit.md) for setup, API reference, and examples.
+
+---
+
 ### Secret scanning blocking legitimate responses (`-32002`)
 
 **Cause:** The tool's response contains a pattern that matches the secret scanner

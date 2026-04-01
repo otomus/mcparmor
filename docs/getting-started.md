@@ -146,3 +146,4 @@ your tool.
 - [manifest-spec.md](manifest-spec.md) — full reference for every `armor.json` field
 - [security-model.md](security-model.md) — how the two enforcement layers work
 - [integrations.md](integrations.md) — per-host setup, SDK usage, and advanced patterns
+- [testkit.md](testkit.md) — test your armor.json policies against the real broker

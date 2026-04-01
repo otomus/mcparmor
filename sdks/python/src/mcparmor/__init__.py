@@ -4,14 +4,18 @@ from mcparmor._manifest import ArmorManifest, ManifestLoadError
 from mcparmor._pool import ArmoredPool, ArmoredPoolError
 from mcparmor._popen import ArmorPopenError, armor_popen
 from mcparmor._process import ArmoredProcess, ArmoredProcessError
+from mcparmor.testkit import ArmorErrorCode, ArmorTestHarness, ToolCallResult
 
 __all__ = [
+    "ArmorErrorCode",
     "ArmorManifest",
+    "ArmorTestHarness",
     "ManifestLoadError",
     "ArmoredPool",
     "ArmoredPoolError",
     "ArmoredProcess",
     "ArmoredProcessError",
+    "ToolCallResult",
     "armor_popen",
     "ArmorPopenError",
 ]

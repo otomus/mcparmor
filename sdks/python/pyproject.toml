@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcparmor"
-version = "0.2.0"
+version = "0.3.0"
 description = "MCP Armor — capability enforcement for MCP tools"
 requires-python = ">=3.12"
 dependencies = []
@@ -19,4 +19,4 @@ packages = ["src/mcparmor"]
 testpaths = ["tests"]
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-cov"]
+dev = ["pytest>=8", "pytest-cov", "pytest-asyncio>=0.23"]
