@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 /**
  * Site footer with three columns: logo/tagline, links, and GitHub.
@@ -51,15 +52,27 @@ export function Footer(): ReactNode {
 
 function FooterLink({ href, children }: { href: string; children: ReactNode }): ReactNode {
   const isExternal = href.startsWith("http");
+  if (isExternal) {
+    return (
+      <a
+        href={href}
+        className="text-sm hover:underline"
+        style={{ color: "var(--color-text-secondary)" }}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+      </a>
+    );
+  }
   return (
-    <a
+    <Link
       href={href}
       className="text-sm hover:underline"
       style={{ color: "var(--color-text-secondary)" }}
-      {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
     >
       {children}
-    </a>
+    </Link>
   );
 }
 

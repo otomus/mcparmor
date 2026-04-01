@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { GitHubStars } from "./GitHubStars";
 
@@ -34,19 +35,19 @@ export function Navbar(): ReactNode {
 
 function Logo(): ReactNode {
   return (
-    <a href="/" className="text-lg font-semibold" style={{ fontFamily: "var(--font-body)" }} aria-label="MCP Armor home">
+    <Link href="/" className="text-lg font-semibold" style={{ fontFamily: "var(--font-body)" }} aria-label="MCP Armor home">
       MCP ARM
       <span style={{ color: "var(--color-accent)" }} aria-hidden="true">⬡</span>R
-    </a>
+    </Link>
   );
 }
 
 function DesktopLinks(): ReactNode {
   return (
     <div className="hidden md:flex items-center gap-6">
-      <a href="/docs" className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+      <Link href="/docs" className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
         Docs
-      </a>
+      </Link>
       <a
         href="https://github.com/otomus/mcparmor"
         className="text-sm flex items-center gap-2"
@@ -111,9 +112,9 @@ function MobileMenu({ onClose }: { onClose: () => void }): ReactNode {
       className="md:hidden border-b p-4 flex flex-col gap-4"
       style={{ backgroundColor: "var(--color-bg)", borderColor: "var(--color-border)" }}
     >
-      <a href="/docs" className="text-sm" style={{ color: "var(--color-text-secondary)" }} onClick={onClose}>
+      <Link href="/docs" className="text-sm" style={{ color: "var(--color-text-secondary)" }} onClick={onClose}>
         Docs
-      </a>
+      </Link>
       <a
         href="https://github.com/otomus/mcparmor"
         className="text-sm"

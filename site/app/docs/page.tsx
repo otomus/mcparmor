@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 interface DocCard {
   title: string;
@@ -38,6 +39,11 @@ const CARDS: DocCard[] = [
     href: "/docs/integrations",
   },
   {
+    title: "TestKit",
+    description: "Test your armor.json policies against the real broker.",
+    href: "/docs/testkit",
+  },
+  {
     title: "Community Profiles",
     description: "Pre-built armor profiles for popular MCP tools.",
     href: "/docs/profiles",
@@ -61,7 +67,7 @@ export default function DocsIndex(): ReactNode {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {CARDS.map((card) => (
-          <a
+          <Link
             key={card.href}
             href={card.href}
             className="block p-6 rounded-lg border hover:border-[var(--color-accent)] transition-colors"
@@ -71,7 +77,7 @@ export default function DocsIndex(): ReactNode {
             <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
               {card.description}
             </p>
-          </a>
+          </Link>
         ))}
       </div>
     </div>

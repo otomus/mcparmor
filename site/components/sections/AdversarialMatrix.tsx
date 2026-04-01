@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import {
   ADVERSARIAL_TESTS,
@@ -108,13 +109,13 @@ export function AdversarialMatrix(): ReactNode {
         </div>
 
         <div className="mt-6 text-center">
-          <a
+          <Link
             href="/docs/security"
             className="text-sm font-medium"
             style={{ color: "var(--color-accent)" }}
           >
             Full security model →
-          </a>
+          </Link>
         </div>
       </div>
     </section>

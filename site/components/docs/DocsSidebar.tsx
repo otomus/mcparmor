@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 
 interface SidebarSection {
   title: string;
@@ -32,6 +33,7 @@ const SECTIONS: SidebarSection[] = [
     title: "Integrations",
     links: [
       { href: "/docs/integrations", label: "Host Integrations" },
+      { href: "/docs/testkit", label: "TestKit" },
     ],
   },
   {
@@ -87,14 +89,14 @@ export function DocsSidebar(): ReactNode {
               <ul className="flex flex-col gap-1">
                 {section.links.map((link) => (
                   <li key={link.href}>
-                    <a
+                    <Link
                       href={link.href}
                       className="block text-sm py-1 hover:underline"
                       style={{ color: "var(--color-text-secondary)" }}
                       onClick={() => setOpen(false)}
                     >
                       {link.label}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
