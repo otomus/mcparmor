@@ -17,7 +17,7 @@ export default function InstallationPage(): ReactNode {
       </h1>
 
       <Section title="macOS (Homebrew)">
-        <CodeBlock code="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install mcparmor" lang="bash" />
+        <CodeBlock code="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install otomus-mcp-armor" lang="bash" />
         <p className="mt-3 text-sm" style={{ color: "var(--color-text-secondary)" }}>
           Requires macOS 12+. Full enforcement including Seatbelt sandbox.
         </p>
@@ -31,7 +31,7 @@ export default function InstallationPage(): ReactNode {
       </Section>
 
       <Section title="npm (cross-platform)">
-        <CodeBlock code="npm install -g mcparmor" lang="bash" />
+        <CodeBlock code="npm install -g @otomus/mcparmor" lang="bash" />
         <p className="mt-3 text-sm" style={{ color: "var(--color-text-secondary)" }}>
           Recommended for Node.js users. Binary verified with SHA-256 checksum at install.
         </p>

@@ -3,7 +3,7 @@ import { CopyButton } from "@/components/ui/CopyButton";
 
 /** Two-line install CTA with copy button. */
 export function InstallCTA(): ReactNode {
-  const installCommand = "brew tap otomus/mcparmor https://github.com/otomus/mcparmor\nbrew install mcparmor\nmcparmor wrap --host claude-desktop";
+  const installCommand = "brew tap otomus/mcparmor https://github.com/otomus/mcparmor\nbrew install otomus-mcp-armor\nmcparmor wrap --host claude-desktop";
 
   return (
     <div
@@ -22,7 +22,7 @@ export function InstallCTA(): ReactNode {
           <code>
             <span style={{ color: "var(--color-text-tertiary)" }}>$ </span>brew tap otomus/mcparmor https://github.com/otomus/mcparmor
             {"\n"}
-            <span style={{ color: "var(--color-text-tertiary)" }}>$ </span>brew install mcparmor
+            <span style={{ color: "var(--color-text-tertiary)" }}>$ </span>brew install otomus-mcp-armor
             {"\n"}
             <span style={{ color: "var(--color-text-tertiary)" }}>$ </span>mcparmor wrap --host claude-desktop
           </code>

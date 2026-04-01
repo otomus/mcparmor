@@ -1,4 +1,4 @@
-class Mcparmor < Formula
+class OtomusMcpArmor < Formula
   desc "Capability enforcement for MCP tools — kernel-level sandboxing"
   homepage "https://github.com/otomus/mcparmor"
   version "0.3.0"

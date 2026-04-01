@@ -67,7 +67,7 @@ export default function IntegrationsPage(): ReactNode {
         <p className="mb-4" style={{ color: "var(--color-text-secondary)", lineHeight: "var(--lh-body)" }}>
           Drop-in replacement for <code>child_process.spawn</code> with armor enforcement.
         </p>
-        <CodeBlock code="npm install mcparmor" lang="bash" />
+        <CodeBlock code="npm install @otomus/mcparmor" lang="bash" />
         <div className="mt-4">
           <CodeBlock code={NODE_SDK} lang="javascript" filename="example.js" />
         </div>

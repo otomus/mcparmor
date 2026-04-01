@@ -9,7 +9,7 @@ const INSTALL_TABS = [
     label: "macOS",
     content: (
       <CodeBlock
-        code="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install mcparmor"
+        code="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install otomus-mcp-armor"
         lang="bash"
       />
     ),
@@ -28,7 +28,7 @@ const INSTALL_TABS = [
     id: "npm",
     label: "npm",
     content: (
-      <CodeBlock code="npm install -g mcparmor" lang="bash" />
+      <CodeBlock code="npm install -g @otomus/mcparmor" lang="bash" />
     ),
   },
   {

@@ -282,7 +282,7 @@ proc = armor_popen(
 Install from npm:
 
 ```bash
-npm install mcparmor
+npm install @otomus/mcparmor
 ```
 
 ### Basic usage
@@ -473,7 +473,7 @@ unavailable on this kernel version.
 platform-specific bundled binary.
 
 **Fix:**
-1. Install the binary: `brew install mcparmor` (macOS) or download from the releases
+1. Install the binary: `brew install otomus-mcp-armor` (macOS) or download from the releases
    page.
 2. Ensure `mcparmor` is on your `PATH`: `which mcparmor`.
 3. If using a virtual environment, ensure the environment's `PATH` includes the

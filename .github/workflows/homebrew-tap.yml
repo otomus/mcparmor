@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   update-tap:
-    name: Update Formula/mcparmor.rb
+    name: Update Formula/otomus-mcp-armor.rb
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -59,7 +59,7 @@ jobs:
           X86_64_SHA="${{ steps.sha.outputs.x86_64 }}"
           BASE_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}"
 
-          python3 - Formula/mcparmor.rb "$VERSION" "$ARM64_SHA" "$X86_64_SHA" "$BASE_URL" <<'PYEOF'
+          python3 - Formula/otomus-mcp-armor.rb "$VERSION" "$ARM64_SHA" "$X86_64_SHA" "$BASE_URL" <<'PYEOF'
           import re, sys
 
           formula_path, version, arm64_sha, x86_64_sha, base_url = sys.argv[1:]
@@ -102,6 +102,6 @@ jobs:
           TAG="${{ steps.tag.outputs.tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/mcparmor.rb
-          git commit -m "chore: update mcparmor formula to ${TAG}"
+          git add Formula/otomus-mcp-armor.rb
+          git commit -m "chore: update otomus-mcp-armor formula to ${TAG}"
           git push

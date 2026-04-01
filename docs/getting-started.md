@@ -9,7 +9,7 @@ tool subprocesses. This guide gets you from zero to protected in five minutes.
 
 **macOS (Homebrew):**
 ```bash
-brew install mcparmor
+brew install otomus-mcp-armor
 mcparmor --version
 ```
 

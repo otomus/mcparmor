@@ -74,9 +74,9 @@ function InstallButton(): ReactNode {
           fontSize: "var(--text-sm)",
         }}
       >
-        brew install mcparmor
+        brew install otomus-mcp-armor
       </span>
-      <CopyButton text="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install mcparmor" />
+      <CopyButton text="brew tap otomus/mcparmor https://github.com/otomus/mcparmor && brew install otomus-mcp-armor" />
     </div>
   );
 }
