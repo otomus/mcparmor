@@ -25,7 +25,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
 from typing import Any

@@ -21,8 +21,3 @@ export function trackEvent(name: string, props?: Record<string, string>): void {
 export function trackHeroVariant(variant: string): void {
   trackEvent("hero_variant", { variant });
 }
-
-/** Track an install command copy event. */
-export function trackInstallCopy(method: string): void {
-  trackEvent("install_copy", { method });
-}
