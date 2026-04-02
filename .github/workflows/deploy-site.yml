@@ -32,6 +32,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Resolve latest release tag
+        run: echo "NEXT_PUBLIC_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')" >> "$GITHUB_ENV"
+
       - run: npx next build
 
       - uses: actions/configure-pages@v5
