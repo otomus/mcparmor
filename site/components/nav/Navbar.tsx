@@ -35,9 +35,21 @@ export function Navbar(): ReactNode {
 
 function Logo(): ReactNode {
   return (
-    <Link href="/" className="text-lg font-semibold" style={{ fontFamily: "var(--font-body)" }} aria-label="MCP Armor home">
-      MCP ARM
-      <span style={{ color: "var(--color-accent)" }} aria-hidden="true">⬡</span>R
+    <Link href="/" className="flex items-center gap-2 text-lg font-semibold" style={{ fontFamily: "var(--font-body)" }} aria-label="MCP Armor home">
+      <span>
+        MCP ARM
+        <span style={{ color: "var(--color-accent)" }} aria-hidden="true">⬡</span>R
+      </span>
+      <span
+        className="text-xs font-normal px-1.5 py-0.5 rounded"
+        style={{
+          color: "var(--color-accent)",
+          backgroundColor: "var(--color-bg-muted)",
+          fontFamily: "var(--font-mono)",
+        }}
+      >
+        v0.3.0
+      </span>
     </Link>
   );
 }
