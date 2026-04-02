@@ -6,15 +6,13 @@ and responds with user-configured responses. Used as the "tool behind the
 broker" in test harnesses — the broker enforces policy against this server's
 responses.
 
-Configuration is loaded from a JSON file whose path is read from the
-``MCPARMOR_MOCK_CONFIG`` environment variable. The config is re-read on
-every ``tools/call`` so that mid-test reconfiguration works without
-restarting the process.
+Configuration is loaded from a JSON file whose path is passed as the
+first CLI argument. The config is re-read on every request so that
+mid-test reconfiguration works without restarting the process.
 """
 from __future__ import annotations
 
 import json
-import os
 import sys
 from typing import Any
 

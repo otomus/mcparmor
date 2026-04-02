@@ -170,15 +170,17 @@ function writeMessage(proc: ChildProcess, message: Record<string, unknown>): Pro
       return;
     }
     const line = JSON.stringify(message) + '\n';
+    const onDrain = (): void => resolve();
     const flushed = proc.stdin.write(line, (err) => {
       if (err != null) {
+        proc.stdin?.removeListener('drain', onDrain);
         reject(new ArmorTestHarnessError('Failed to write to broker stdin', { cause: err }));
       }
     });
     if (flushed) {
       resolve();
     } else {
-      proc.stdin.once('drain', resolve);
+      proc.stdin.once('drain', onDrain);
     }
   });
 }
@@ -389,11 +391,8 @@ export class ArmorTestHarness {
     }
     brokerArgs.push('--no-audit', '--', process.execPath, mockServerPath, this.#configPath);
 
-    const env = { ...process.env };
-
     this.#process = spawn(binaryPath, brokerArgs, {
       stdio: 'pipe',
-      env,
     });
   }
 

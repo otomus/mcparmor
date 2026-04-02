@@ -143,7 +143,8 @@ class ArmorTestHarness:
         exc_tb: TracebackType | None,
     ) -> None:
         """Terminate the broker process and clean up temp files."""
-        self.stop()
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self.stop)
 
     # ------------------------------------------------------------------
     # Public API
@@ -284,15 +285,12 @@ class ArmorTestHarness:
         broker_args.extend(["--no-audit", "--"])
         broker_args.extend([sys.executable, mock_server, self._config_path])
 
-        env = os.environ.copy()
-
         try:
             self._process = subprocess.Popen(
                 [binary, *broker_args],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                env=env,
             )
         except OSError as exc:
             raise ArmorTestHarnessError(
