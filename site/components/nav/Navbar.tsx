@@ -48,7 +48,7 @@ function Logo(): ReactNode {
           fontFamily: "var(--font-mono)",
         }}
       >
-        v0.3.0
+        v0.3.1
       </span>
     </Link>
   );
